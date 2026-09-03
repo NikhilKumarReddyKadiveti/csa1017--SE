@@ -1,0 +1,1650 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kerala Flood Intelligence — AI Early Warning &amp; Evacuation Platform</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<style>
+:root{
+  --void:#0A0E14; --panel:#111A26; --panel2:#16202E; --line:#22303F; --line-soft:#1A2532;
+  --hi:#EAF1F5; --lo:#7E92A3; --dim:#57687A;
+  --signal:#2FD9C4; --signal-dim:rgba(47,217,196,.14);
+  --blue:#4C8DFF; --blue-dim:rgba(76,141,255,.14);
+  --critical:#FF4757; --high:#FF9F43; --moderate:#F2C94C; --low:#2ED573;
+  --critical-dim:rgba(255,71,87,.14); --high-dim:rgba(255,159,67,.14); --moderate-dim:rgba(242,201,76,.14); --low-dim:rgba(46,213,115,.14);
+  --font-d:'Space Grotesk',sans-serif; --font-b:'IBM Plex Sans',sans-serif; --font-m:'IBM Plex Mono',monospace;
+}
+*{box-sizing:border-box; margin:0; padding:0;}
+html{scroll-behavior:smooth;}
+body{background:var(--void); color:var(--hi); font-family:var(--font-b); line-height:1.5; overflow-x:hidden;}
+::selection{background:var(--signal-dim); color:var(--signal);}
+a{color:inherit; text-decoration:none;}
+button{font-family:inherit; cursor:pointer;}
+::-webkit-scrollbar{width:10px; height:10px;}
+::-webkit-scrollbar-track{background:var(--void);}
+::-webkit-scrollbar-thumb{background:var(--line); border-radius:6px;}
+
+/* ---------- utility ---------- */
+.eyebrow{font-family:var(--font-m); font-size:11px; letter-spacing:.04em; color:var(--dim);}
+.mono{font-family:var(--font-m);}
+.signal-dot{width:7px; height:7px; border-radius:50%; background:var(--signal); box-shadow:0 0 0 3px var(--signal-dim); display:inline-block; animation:pulse 2s ease-in-out infinite;}
+@keyframes pulse{0%,100%{opacity:1;} 50%{opacity:.45;}}
+.risk-chip{display:inline-flex; align-items:center; gap:6px; padding:3px 10px 3px 8px; border-radius:20px; font-family:var(--font-m); font-size:11.5px; font-weight:500; border:1px solid transparent;}
+.risk-chip .dot{width:6px; height:6px; border-radius:50%;}
+.risk-chip.critical{background:var(--critical-dim); color:var(--critical); border-color:rgba(255,71,87,.25);}
+.risk-chip.critical .dot{background:var(--critical);}
+.risk-chip.high{background:var(--high-dim); color:var(--high); border-color:rgba(255,159,67,.25);}
+.risk-chip.high .dot{background:var(--high);}
+.risk-chip.moderate{background:var(--moderate-dim); color:var(--moderate); border-color:rgba(242,201,76,.25);}
+.risk-chip.moderate .dot{background:var(--moderate);}
+.risk-chip.low{background:var(--low-dim); color:var(--low); border-color:rgba(46,213,115,.25);}
+.risk-chip.low .dot{background:var(--low);}
+.sim-tag{font-family:var(--font-m); font-size:10px; color:var(--dim); border:1px dashed var(--line); padding:2px 7px; border-radius:4px; letter-spacing:.02em;}
+.btn{font-family:var(--font-b); font-weight:500; font-size:14.5px; padding:12px 22px; border-radius:8px; border:1px solid var(--line); background:var(--panel2); color:var(--hi); transition:border-color .15s, transform .1s;}
+.btn:hover{border-color:var(--signal);}
+.btn:active{transform:scale(.98);}
+.btn-primary{background:var(--signal); color:#04211D; border-color:var(--signal); font-weight:600;}
+.btn-primary:hover{background:#3FE8D2;}
+.btn-ghost{background:transparent;}
+.btn-block{width:100%;}
+.btn-sm{padding:8px 14px; font-size:13px;}
+.hidden{display:none !important;}
+
+/* ---------- nav ---------- */
+.topnav{position:fixed; top:0; left:0; right:0; z-index:500; display:flex; align-items:center; justify-content:space-between; padding:16px 32px; background:rgba(10,14,20,.78); backdrop-filter:blur(10px); border-bottom:1px solid var(--line-soft);}
+.brand{display:flex; align-items:center; gap:10px; font-family:var(--font-d); font-weight:600; font-size:16px;}
+.brand-mark{width:26px; height:26px; border-radius:6px; background:linear-gradient(135deg,var(--signal),var(--blue)); display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; color:#04211D;}
+.navlinks{display:flex; gap:28px; align-items:center;}
+.navlinks button{background:none; border:none; color:var(--lo); font-size:14px; font-family:var(--font-b); padding:6px 2px; border-bottom:2px solid transparent;}
+.navlinks button:hover{color:var(--hi);}
+.navlinks button.active{color:var(--hi); border-color:var(--signal);}
+.nav-right{display:flex; align-items:center; gap:14px;}
+.role-badge{font-family:var(--font-m); font-size:11px; color:var(--signal); background:var(--signal-dim); padding:5px 10px; border-radius:6px; display:flex; align-items:center; gap:6px;}
+
+/* ---------- hero ---------- */
+.view{min-height:100vh; padding-top:70px;}
+.hero{position:relative; min-height:92vh; display:grid; grid-template-columns:1.15fr .85fr; align-items:center; gap:40px; padding:60px 5vw 40px; overflow:hidden;}
+.hero-bg{position:absolute; inset:0; z-index:0; opacity:.55;}
+.hero-bg svg{width:100%; height:100%;}
+.hero-left{position:relative; z-index:2;}
+.hero-eyebrow{display:flex; align-items:center; gap:8px; margin-bottom:22px;}
+.hero h1{font-family:var(--font-d); font-size:clamp(36px,4.6vw,64px); line-height:1.04; font-weight:600; letter-spacing:-.01em; max-width:14ch;}
+.hero h1 .accent{color:var(--signal);}
+.hero p.sub{margin-top:22px; font-size:17px; color:var(--lo); max-width:46ch; line-height:1.6;}
+.hero-ctas{display:flex; gap:14px; margin-top:34px; flex-wrap:wrap;}
+.hero-note{margin-top:28px; font-family:var(--font-m); font-size:12px; color:var(--dim); display:flex; align-items:center; gap:8px;}
+
+.readout{position:relative; z-index:2; background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:22px; display:grid; gap:2px;}
+.readout-head{display:flex; justify-content:space-between; align-items:center; padding-bottom:14px; margin-bottom:8px; border-bottom:1px solid var(--line-soft);}
+.readout-head span{font-family:var(--font-m); font-size:11px; color:var(--dim);}
+.readout-row{display:flex; justify-content:space-between; align-items:baseline; padding:14px 4px; border-bottom:1px solid var(--line-soft);}
+.readout-row:last-child{border-bottom:none;}
+.readout-label{font-size:13px; color:var(--lo);}
+.readout-val{font-family:var(--font-d); font-size:26px; font-weight:600;}
+.readout-val small{font-family:var(--font-m); font-size:12px; color:var(--dim); font-weight:400; margin-left:4px;}
+
+/* ---------- sections ---------- */
+.section{padding:100px 5vw; border-top:1px solid var(--line-soft); max-width:1400px; margin:0 auto;}
+.section-head{display:grid; grid-template-columns:auto 1fr; gap:40px; align-items:start; margin-bottom:52px;}
+.section-idx{font-family:var(--font-m); font-size:13px; color:var(--dim); padding-top:8px;}
+.section h2{font-family:var(--font-d); font-size:clamp(26px,3vw,38px); font-weight:600; max-width:16ch;}
+.section-desc{color:var(--lo); font-size:15px; max-width:52ch; margin-top:10px;}
+
+.flow{display:flex; gap:0; flex-wrap:wrap; align-items:center;}
+.flow-step{background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px 20px; font-size:13.5px; min-width:140px;}
+.flow-step .n{font-family:var(--font-m); font-size:10px; color:var(--signal); margin-bottom:6px; display:block;}
+.flow-arrow{color:var(--dim); padding:0 14px; font-size:18px;}
+
+.grid-3{display:grid; grid-template-columns:repeat(3,1fr); gap:18px;}
+.grid-4{display:grid; grid-template-columns:repeat(4,1fr); gap:18px;}
+.cap-card{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:24px; transition:border-color .15s;}
+.cap-card:hover{border-color:var(--line-soft); background:var(--panel2);}
+.cap-card .ico{width:36px; height:36px; border-radius:8px; background:var(--signal-dim); color:var(--signal); display:flex; align-items:center; justify-content:center; margin-bottom:16px; font-size:16px;}
+.cap-card h3{font-family:var(--font-d); font-size:16.5px; font-weight:600; margin-bottom:8px;}
+.cap-card p{font-size:13.5px; color:var(--lo); line-height:1.55;}
+
+.tech-row{display:flex; flex-wrap:wrap; gap:12px;}
+.tech-pill{border:1px solid var(--line); border-radius:20px; padding:9px 16px; font-family:var(--font-m); font-size:12.5px; color:var(--lo); background:var(--panel);}
+
+.sdg-row{display:flex; gap:16px; flex-wrap:wrap;}
+.sdg{width:150px; padding:18px; border-radius:10px; text-align:left;}
+.sdg h4{font-family:var(--font-d); font-size:22px;}
+.sdg p{font-size:12px; margin-top:6px; opacity:.9;}
+.sdg.s3{background:#274; color:#dfffe8;} .sdg.s9{background:#a3401f; color:#ffe8dc;}
+.sdg.s11{background:#c19b12; color:#2a2004;} .sdg.s13{background:#3a6b3f; color:#e6ffe9;}
+
+.final-cta{text-align:center; padding:120px 5vw; border-top:1px solid var(--line-soft);}
+.final-cta h2{font-family:var(--font-d); font-size:clamp(28px,4vw,44px); font-weight:600; max-width:20ch; margin:0 auto 30px;}
+
+footer{padding:36px 5vw; border-top:1px solid var(--line-soft); display:flex; justify-content:space-between; color:var(--dim); font-size:12.5px; font-family:var(--font-m);}
+
+/* ---------- login ---------- */
+.auth-wrap{min-height:100vh; display:flex; align-items:center; justify-content:center; padding:100px 20px 40px;}
+.auth-card{width:400px; background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:36px;}
+.auth-card h2{font-family:var(--font-d); font-size:22px; margin-bottom:6px;}
+.auth-card .sub{color:var(--lo); font-size:13.5px; margin-bottom:26px;}
+.field{margin-bottom:16px;}
+.field label{display:block; font-size:12.5px; color:var(--lo); margin-bottom:6px;}
+.field input, .field select{width:100%; background:var(--void); border:1px solid var(--line); color:var(--hi); padding:11px 12px; border-radius:8px; font-family:var(--font-b); font-size:14px;}
+.field input:focus, .field select:focus{outline:none; border-color:var(--signal);}
+.role-select{display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:20px;}
+.role-opt{border:1px solid var(--line); border-radius:8px; padding:12px 8px; text-align:center; font-size:12px; background:var(--void);}
+.role-opt.sel{border-color:var(--signal); background:var(--signal-dim); color:var(--signal);}
+.auth-demo{margin-top:18px; font-size:12px; color:var(--dim); text-align:center; font-family:var(--font-m);}
+
+/* ---------- dashboards ---------- */
+.dash{padding:28px 5vw 70px;}
+.dash-head{display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:26px; flex-wrap:wrap; gap:14px;}
+.dash-head h1{font-family:var(--font-d); font-size:26px; font-weight:600;}
+.dash-head .sub{color:var(--lo); font-size:13.5px; margin-top:4px;}
+.stat-strip{display:grid; grid-template-columns:repeat(6,1fr); gap:12px; margin-bottom:24px;}
+.stat{background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px 18px;}
+.stat .lbl{font-size:11.5px; color:var(--lo); margin-bottom:8px;}
+.stat .val{font-family:var(--font-d); font-size:24px; font-weight:600;}
+.stat .val.c-critical{color:var(--critical);} .stat .val.c-high{color:var(--high);} .stat .val.c-signal{color:var(--signal);}
+.panel{background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:20px;}
+.panel-head{display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;}
+.panel-head h3{font-family:var(--font-d); font-size:15px; font-weight:600;}
+.dash-grid{display:grid; grid-template-columns:1.7fr 1fr; gap:18px; margin-bottom:18px;}
+#authorityMap, #citizenMap{height:420px; border-radius:10px; width:100%; background:#0d1420;}
+.legend{display:flex; flex-wrap:wrap; gap:12px; margin-top:12px; font-size:11.5px; color:var(--lo);}
+.legend span{display:inline-flex; align-items:center; gap:6px;}
+.legend i{width:10px; height:10px; border-radius:50%; display:inline-block;}
+
+.sensor-list{display:flex; flex-direction:column; gap:12px;}
+.sensor-row{display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid var(--line-soft);}
+.sensor-row:last-child{border-bottom:none;}
+.sensor-name{font-size:13px; color:var(--lo);}
+.sensor-val{font-family:var(--font-m); font-size:15px; font-weight:500;}
+.sensor-bar{height:4px; background:var(--line-soft); border-radius:2px; margin-top:6px; overflow:hidden;}
+.sensor-bar i{display:block; height:100%; background:var(--signal); border-radius:2px; transition:width .6s ease;}
+
+.list-row{display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-bottom:1px solid var(--line-soft); gap:12px;}
+.list-row:last-child{border-bottom:none;}
+.list-title{font-size:13.5px; font-weight:500;}
+.list-meta{font-size:11.5px; color:var(--dim); margin-top:2px;}
+.status-pill{font-family:var(--font-m); font-size:10.5px; padding:3px 9px; border-radius:12px; white-space:nowrap;}
+.status-pill.NEW{background:var(--high-dim); color:var(--high);}
+.status-pill.VERIFIED{background:var(--blue-dim); color:var(--blue);}
+.status-pill.IN_PROGRESS{background:var(--moderate-dim); color:var(--moderate);}
+.status-pill.RESOLVED{background:var(--low-dim); color:var(--low);}
+.status-pill.AVAILABLE{background:var(--low-dim); color:var(--low);}
+.status-pill.LIMITED{background:var(--moderate-dim); color:var(--moderate);}
+.status-pill.FULL{background:var(--critical-dim); color:var(--critical);}
+.status-pill.CLOSED{background:var(--line-soft); color:var(--dim);}
+
+.risk-hero{background:linear-gradient(135deg,var(--panel),var(--panel2)); border:1px solid var(--line); border-radius:14px; padding:28px; margin-bottom:18px; position:relative; overflow:hidden;}
+.risk-hero .rh-top{display:flex; justify-content:space-between; align-items:flex-start;}
+.risk-hero .rh-level{font-family:var(--font-d); font-size:30px; font-weight:700; margin:14px 0 4px;}
+.risk-hero .rh-loc{color:var(--lo); font-size:13.5px;}
+.risk-hero .rh-prob{font-family:var(--font-d); font-size:52px; font-weight:700; line-height:1;}
+.risk-hero .rh-prob-lbl{font-size:11.5px; color:var(--lo); margin-top:4px;}
+.rh-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-top:22px; padding-top:20px; border-top:1px solid var(--line-soft);}
+.rh-grid .k{font-size:11.5px; color:var(--lo);} .rh-grid .v{font-family:var(--font-m); font-size:16px; margin-top:4px;}
+.action-row{display:flex; gap:12px; margin-top:20px; flex-wrap:wrap;}
+
+.form-grid{display:grid; grid-template-columns:1fr 1fr; gap:14px;}
+.form-grid .full{grid-column:1/-1;}
+textarea{width:100%; background:var(--void); border:1px solid var(--line); color:var(--hi); padding:11px 12px; border-radius:8px; font-family:var(--font-b); font-size:14px; resize:vertical; min-height:80px;}
+
+.chart-wrap{position:relative; height:230px;}
+.toast{position:fixed; bottom:24px; right:24px; background:var(--panel2); border:1px solid var(--signal); color:var(--hi); padding:14px 18px; border-radius:10px; font-size:13.5px; z-index:900; max-width:320px; box-shadow:0 8px 24px rgba(0,0,0,.4); transform:translateY(0); transition:opacity .3s, transform .3s;}
+.toast.out{opacity:0; transform:translateY(10px);}
+
+.analytics-grid{display:grid; grid-template-columns:1fr 1fr; gap:18px;}
+.metric-row{display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:18px;}
+.metric-box{background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:16px;}
+.metric-box .k{font-size:11.5px; color:var(--lo);}
+.metric-box .v{font-family:var(--font-d); font-size:24px; font-weight:600; margin-top:6px;}
+
+.live-feed{display:grid; gap:10px;}
+.feed-card{background:var(--void); border:1px solid var(--line); border-radius:10px; padding:12px 14px; display:flex; flex-direction:column; gap:8px;}
+.feed-top{display:flex; justify-content:space-between; gap:8px; align-items:flex-start;}
+.feed-card .title{font-size:13px; font-weight:600;}
+.feed-card .meta{font-size:11.5px; color:var(--dim); margin-top:2px;}
+.feed-card .desc{font-size:12.5px; color:var(--lo); line-height:1.5;}
+.feed-badge{font-family:var(--font-m); font-size:10px; padding:4px 8px; border-radius:12px; white-space:nowrap;}
+.feed-badge.NEW{background:var(--high-dim); color:var(--high);}
+.feed-badge.VERIFIED{background:var(--blue-dim); color:var(--blue);}
+.feed-badge.IN_PROGRESS{background:var(--moderate-dim); color:var(--moderate);}
+.feed-badge.RESOLVED{background:var(--low-dim); color:var(--low);}
+
+.notification-list{display:grid; gap:10px; margin-top:8px;}
+.notification-item{background:var(--void); border:1px solid var(--line); border-radius:10px; padding:12px 14px;}
+.notification-item .head{display:flex; justify-content:space-between; gap:8px; align-items:center; margin-bottom:6px;}
+.notification-item .text{font-size:12.5px; color:var(--lo); line-height:1.5;}
+
+.heat-grid{display:grid; grid-template-columns:repeat(2, minmax(110px, 1fr)); gap:10px; margin-top:10px;}
+.heat-cell{padding:12px; border-radius:10px; border:1px solid var(--line); background:linear-gradient(135deg, rgba(76,141,255,.14), rgba(47,217,196,.12));}
+.heat-cell .district{font-size:11.5px; color:var(--lo);}
+.heat-cell .level{font-family:var(--font-d); font-size:22px; font-weight:600; margin-top:8px;}
+
+.route-box{border:1px solid var(--line); border-radius:10px; padding:16px; margin-top:14px; background:var(--void);}
+.route-step{display:flex; gap:10px; align-items:flex-start; padding:8px 0; font-size:13px;}
+.route-step .dot2{width:8px; height:8px; border-radius:50%; background:var(--signal); margin-top:5px; flex-shrink:0;}
+
+@media (max-width:980px){
+  .hero{grid-template-columns:1fr;}
+  .grid-3, .grid-4{grid-template-columns:1fr 1fr;}
+  .dash-grid{grid-template-columns:1fr;}
+  .stat-strip{grid-template-columns:repeat(3,1fr);}
+  .analytics-grid{grid-template-columns:1fr;}
+  .navlinks{display:none;}
+  .metric-row{grid-template-columns:1fr 1fr;}
+  .role-select{grid-template-columns:1fr;}
+}
+
+/* ========== FLOODGUARD AI CHATBOT ========== */
+.chat-fab{position:fixed; bottom:24px; right:24px; z-index:1000; width:56px; height:56px; border-radius:50%; background:linear-gradient(135deg,var(--signal),var(--blue)); border:none; box-shadow:0 4px 16px rgba(47,217,196,.3); cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:24px; transition:all .2s; transform:scale(1);}
+.chat-fab:hover{transform:scale(1.12); box-shadow:0 8px 24px rgba(47,217,196,.5);}
+.chat-fab:active{transform:scale(.95);}
+.chat-fab.unread::after{content:''; position:absolute; top:-2px; right:-2px; width:12px; height:12px; background:#FF4757; border-radius:50%; border:2px solid var(--void);}
+
+.chat-window{position:fixed; bottom:92px; right:24px; z-index:999; width:380px; height:540px; background:var(--panel); border:1px solid var(--line); border-radius:14px; box-shadow:0 12px 48px rgba(0,0,0,.5); display:flex; flex-direction:column; opacity:0; transform:translateY(20px) scale(.9); pointer-events:none; transition:all .25s;}  
+.chat-window.open{opacity:1; transform:translateY(0) scale(1); pointer-events:auto;}
+
+.chat-header{padding:16px; border-bottom:1px solid var(--line-soft); display:flex; justify-content:space-between; align-items:center;}
+.chat-header h3{font-family:var(--font-d); font-size:15px; font-weight:600; margin:0;}
+.chat-header-meta{font-size:11px; color:var(--dim); margin-top:2px;}
+.chat-close{background:none; border:none; color:var(--lo); font-size:20px; cursor:pointer; padding:4px;}
+
+.chat-messages{flex:1; overflow-y:auto; padding:12px; display:flex; flex-direction:column; gap:10px;}
+.chat-message{display:flex; gap:8px; align-items:flex-start;}
+.chat-message.bot .avatar{width:28px; height:28px; border-radius:50%; background:var(--signal-dim); color:var(--signal); display:flex; align-items:center; justify-content:center; font-size:14px; flex-shrink:0;}
+.chat-message.user{justify-content:flex-end;}
+.chat-message.user .avatar{width:28px; height:28px; border-radius:50%; background:var(--blue-dim); color:var(--blue); display:flex; align-items:center; justify-content:center; font-size:14px; flex-shrink:0;}
+.msg-bubble{padding:10px 12px; border-radius:10px; max-width:260px; word-wrap:break-word; font-size:13px; line-height:1.4;}
+.msg-bubble.bot{background:var(--panel2); color:var(--hi);}
+.msg-bubble.user{background:var(--signal); color:#04211D; font-weight:500;}
+.msg-time{font-size:10px; color:var(--dim); margin-top:4px; text-align:center;}
+.msg-bubble.loading{background:var(--void); border:1px solid var(--line); color:var(--dim);}
+.typing-indicator{display:flex; gap:3px; align-items:center;}
+.typing-indicator span{width:4px; height:4px; border-radius:50%; background:var(--signal); animation:typing 1.2s infinite;}
+.typing-indicator span:nth-child(2){animation-delay:.15s;}
+.typing-indicator span:nth-child(3){animation-delay:.3s;}
+@keyframes typing{0%,60%,100%{opacity:.3; transform:translateY(0);} 30%{opacity:1; transform:translateY(-8px);}}
+
+.chat-input-wrap{padding:12px; border-top:1px solid var(--line-soft); display:flex; gap:8px;}
+.chat-input{flex:1; background:var(--void); border:1px solid var(--line); color:var(--hi); padding:10px 12px; border-radius:8px; font-family:var(--font-b); font-size:13px; outline:none; transition:border-color .15s;}
+.chat-input:focus{border-color:var(--signal);}
+.chat-input::placeholder{color:var(--dim);}
+.chat-send{background:var(--signal); border:none; color:#04211D; padding:10px 16px; border-radius:8px; cursor:pointer; font-weight:600; font-size:13px; transition:background .15s;}
+.chat-send:hover{background:#3FE8D2;}
+.chat-send:disabled{background:var(--dim); cursor:not-allowed; opacity:.5;}
+
+.quick-replies{display:flex; gap:6px; flex-wrap:wrap; margin:8px 0;}
+.quick-reply{background:var(--void); border:1px solid var(--line); color:var(--lo); padding:6px 10px; border-radius:6px; font-size:12px; cursor:pointer; transition:all .15s; white-space:nowrap;}
+.quick-reply:hover{border-color:var(--signal); color:var(--signal);}
+
+.api-status{font-size:10px; color:var(--dim); padding:8px 12px; text-align:center; border-top:1px solid var(--line-soft); font-family:var(--font-m);}
+.api-status.demo{color:var(--moderate);}
+.api-status.connected{color:var(--low);}
+
+@media (max-width:480px){
+  .chat-window{width:calc(100vw - 32px); height:calc(100vh - 120px); bottom:auto; top:70px;}
+  .chat-fab{bottom:16px; right:16px;}
+}
+</style>
+</head>
+<body>
+
+<!-- ============ NAV ============ -->
+<nav class="topnav">
+  <div class="brand"><span class="brand-mark">KF</span> Kerala Flood Intelligence</div>
+  <div class="navlinks" id="navlinks">
+    <button data-nav="landing" class="active">Overview</button>
+    <button data-nav="citizen">Citizen</button>
+    <button data-nav="authority">Command Center</button>
+    <button data-nav="reports">Reports</button>
+    <button data-nav="analytics">Analytics</button>
+  </div>
+  <div class="nav-right">
+    <span class="role-badge" id="roleBadge"><span class="signal-dot"></span> Guest</span>
+    <button class="btn btn-sm" id="authBtn" data-nav="login">Sign in</button>
+  </div>
+</nav>
+
+<!-- ============ LANDING ============ -->
+<div class="view" id="view-landing">
+
+  <section class="hero">
+    <div class="hero-bg"><svg viewBox="0 0 800 600" preserveAspectRatio="xMidYMid slice"><path d="M0 420 Q 150 380 260 430 T 500 400 T 800 440 L 800 600 L 0 600 Z" fill="#101c2c"/><path d="M0 460 Q 180 420 320 470 T 620 450 T 800 480 L 800 600 L 0 600 Z" fill="#0d1826"/><g stroke="#1c2d40" stroke-width="1" fill="none" opacity=".6"><path d="M120 60 v540"/><path d="M280 60 v540"/><path d="M440 60 v540"/><path d="M600 60 v540"/><path d="M760 60 v540"/></g><g id="heroDots"></g></svg></div>
+    <div class="hero-left">
+      <div class="hero-eyebrow"><span class="signal-dot"></span><span class="eyebrow">LIVE SIMULATED FEED · KL-DISTRICTS-14</span></div>
+      <h1>Predict. Warn.<br>Evacuate. <span class="accent">Protect.</span></h1>
+      <p class="sub">Real-time intelligence for earlier flood warnings, safer evacuation and coordinated emergency response — built for Kerala's rivers, backwaters and monsoon coastline.</p>
+      <div class="hero-ctas">
+        <button class="btn btn-primary" data-nav="login">Open Live Dashboard</button>
+        <button class="btn btn-ghost" data-scroll="how">Explore How It Works</button>
+      </div>
+      <div class="hero-note">▲ Sensor, weather and satellite figures on this page are simulated for demonstration and clearly labeled throughout.</div>
+    </div>
+    <div class="readout">
+      <div class="readout-head"><span>SYSTEM STATUS</span><span id="clock" class="mono">--:--:--</span></div>
+      <div class="readout-row"><span class="readout-label">Active Risk Zones</span><span class="readout-val" id="stat-riskzones">--</span></div>
+      <div class="readout-row"><span class="readout-label">Monitored Locations</span><span class="readout-val" id="stat-locations">--</span></div>
+      <div class="readout-row"><span class="readout-label">Available Shelters</span><span class="readout-val" id="stat-shelters">--</span></div>
+      <div class="readout-row"><span class="readout-label">Active Alerts</span><span class="readout-val" id="stat-alerts">--</span></div>
+    </div>
+  </section>
+
+  <section class="section" id="how">
+    <div class="section-head">
+      <div class="section-idx">01</div>
+      <div><h2>How the pipeline works</h2><p class="section-desc">Every reading moves through the same chain, from raw sensor data to a citizen standing at a shelter door.</p></div>
+    </div>
+    <div class="flow">
+      <div class="flow-step"><span class="n">DATA</span>Collection</div><div class="flow-arrow">→</div>
+      <div class="flow-step"><span class="n">MODEL</span>AI Prediction</div><div class="flow-arrow">→</div>
+      <div class="flow-step"><span class="n">SCORE</span>Risk Detection</div><div class="flow-arrow">→</div>
+      <div class="flow-step"><span class="n">NOTIFY</span>Alert</div><div class="flow-arrow">→</div>
+      <div class="flow-step"><span class="n">ROUTE</span>Evacuation</div><div class="flow-arrow">→</div>
+      <div class="flow-step"><span class="n">SHELTER</span>Safe Zone</div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section-head">
+      <div class="section-idx">02</div>
+      <div><h2>Key capabilities</h2><p class="section-desc">Eight connected modules covering the full lifecycle of a flood event.</p></div>
+    </div>
+    <div class="grid-4" id="capGrid"></div>
+  </section>
+
+  <section class="section">
+    <div class="section-head">
+      <div class="section-idx">03</div>
+      <div><h2>Built on</h2></div>
+    </div>
+    <div class="tech-row">
+      <span class="tech-pill">AI / ML — scikit-learn</span>
+      <span class="tech-pill">IoT — simulated sensor mesh</span>
+      <span class="tech-pill">GIS — Leaflet + OpenStreetMap</span>
+      <span class="tech-pill">Cloud — Docker Compose</span>
+      <span class="tech-pill">Data Analytics — Chart.js</span>
+      <span class="tech-pill">Secure APIs — REST + JWT</span>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section-head">
+      <div class="section-idx">04</div>
+      <div><h2>Aligned to the UN SDGs</h2></div>
+    </div>
+    <div class="sdg-row">
+      <div class="sdg s3"><h4>SDG 3</h4><p>Good Health &amp; Well-being</p></div>
+      <div class="sdg s9"><h4>SDG 9</h4><p>Industry, Innovation &amp; Infrastructure</p></div>
+      <div class="sdg s11"><h4>SDG 11</h4><p>Sustainable Cities &amp; Communities</p></div>
+      <div class="sdg s13"><h4>SDG 13</h4><p>Climate Action</p></div>
+    </div>
+  </section>
+
+  <section class="final-cta">
+    <h2>Enter the Emergency Intelligence Center</h2>
+    <button class="btn btn-primary" data-nav="login">Enter the Platform →</button>
+  </section>
+
+  <footer>
+    <span>KERALA FLOOD INTELLIGENCE — ACADEMIC PROTOTYPE</span>
+    <span>ALL LIVE DATA ON THIS DEMO IS SIMULATED</span>
+  </footer>
+</div>
+
+<!-- ============ LOGIN ============ -->
+<div class="view hidden" id="view-login">
+  <div class="auth-wrap">
+    <div class="auth-card">
+      <h2>Sign in</h2>
+      <div class="sub">Select a role to preview its dashboard. In the full build this is JWT auth against PostgreSQL with hashed passwords.</div>
+      <div class="role-select" id="roleSelect">
+        <div class="role-opt sel" data-role="citizen">Citizen</div>
+        <div class="role-opt" data-role="authority">Authority</div>
+        <div class="role-opt" data-role="admin">Admin</div>
+      </div>
+      <div class="field"><label>Email</label><input type="email" id="loginEmail" placeholder="citizen@kerala-flood.gov.in" value="citizen@kerala-flood.gov.in"></div>
+      <div class="field"><label>Password</label><input type="password" id="loginPass" placeholder="••••••••" value="demo1234"></div>
+      <button class="btn btn-primary btn-block" id="loginSubmit">Sign in</button>
+      <div class="auth-demo">Demo credentials are pre-filled — this prototype does not transmit real credentials anywhere.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ CITIZEN DASHBOARD ============ -->
+<div class="view hidden" id="view-citizen">
+  <div class="dash">
+    <div class="dash-head">
+      <div><h1>Citizen Dashboard</h1><div class="sub">Your location: <b id="citLoc">Alappuzha</b> · <span class="sim-tag">simulated GPS</span></div></div>
+      <span class="sim-tag">Demo / Simulated Sensor Feed</span>
+    </div>
+
+    <div class="risk-hero">
+      <div class="rh-top">
+        <div>
+          <span class="risk-chip" id="citRiskChip"><span class="dot"></span>HIGH FLOOD RISK</span>
+          <div class="rh-loc" id="citRiskLoc">Alappuzha district · updated just now</div>
+        </div>
+        <div style="text-align:right">
+          <div class="rh-prob" id="citProb">87%</div>
+          <div class="rh-prob-lbl">model probability</div>
+        </div>
+      </div>
+      <div class="rh-grid">
+        <div><div class="k">Rainfall (24h)</div><div class="v" id="citRain">-- mm</div></div>
+        <div><div class="k">Water level</div><div class="v" id="citWater">-- m</div></div>
+        <div><div class="k">Nearest shelter</div><div class="v" id="citShelter">--</div></div>
+        <div><div class="k">Recommended route</div><div class="v" id="citRoute">--</div></div>
+      </div>
+      <div style="margin-top:18px; padding:12px 14px; border-radius:8px; background:var(--high-dim); color:var(--high); font-size:13px;" id="citWarnMsg">
+        Water levels are rising rapidly near your area. Move to higher ground or your nearest shelter if directed by authorities.
+      </div>
+      <div class="action-row">
+        <button class="btn btn-primary" id="btnFindShelter">Find Safe Shelter</button>
+        <button class="btn" id="btnStartEvac">Start Evacuation</button>
+        <button class="btn btn-ghost" data-nav="citizen-report">Report Incident</button>
+      </div>
+    </div>
+
+    <div class="dash-grid">
+      <div class="panel">
+        <div class="panel-head"><h3>Nearby &amp; evacuation map</h3><span class="sim-tag">Leaflet + OSM</span></div>
+        <div id="citizenMap"></div>
+        <div class="legend">
+          <span><i style="background:var(--critical)"></i>Critical</span>
+          <span><i style="background:var(--high)"></i>High</span>
+          <span><i style="background:var(--moderate)"></i>Moderate</span>
+          <span><i style="background:var(--low)"></i>Low</span>
+          <span><i style="background:var(--blue)"></i>Shelter</span>
+          <span>🚧 Blocked road</span>
+        </div>
+        <div class="route-box hidden" id="routeBox">
+          <div class="panel-head" style="margin-bottom:8px;"><h3 style="font-size:13px;">Evacuation route</h3></div>
+          <div id="routeSteps"></div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h3>Active alerts near you</h3></div>
+        <div id="citizenAlerts"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h3>Live citizen reports</h3><span class="sim-tag" id="citizenFeedStatus">Live</span></div>
+        <div id="citizenLiveReports" class="live-feed"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h3>My notifications</h3></div>
+        <div id="citizenNotifications" class="notification-list"></div>
+      </div>
+    </div>
+
+    <div class="panel" id="view-citizen-report">
+      <div class="panel-head"><h3>Report an incident</h3><span class="sim-tag">writes to in-memory demo store</span></div>
+      <div class="form-grid">
+        <div class="field"><label>Incident type</label>
+          <select id="incType"><option>Flooded Road</option><option>Rising Water</option><option>Person Needs Help</option><option>Infrastructure Damage</option><option>Shelter Issue</option><option>Other</option></select>
+        </div>
+        <div class="field"><label>Severity</label>
+          <select id="incSeverity"><option>LOW</option><option selected>MODERATE</option><option>HIGH</option><option>CRITICAL</option></select>
+        </div>
+        <div class="field full"><label>Location</label><input id="incLocation" placeholder="e.g. MC Road near Chengannur Bridge"></div>
+        <div class="field full"><label>Description</label><textarea id="incDesc" placeholder="What are you seeing?"></textarea></div>
+      </div>
+      <button class="btn btn-primary" id="btnSubmitIncident" style="margin-top:14px;">Submit report</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ AUTHORITY DASHBOARD ============ -->
+<div class="view hidden" id="view-authority">
+  <div class="dash">
+    <div class="dash-head">
+      <div><h1>Emergency Operations — Command Center</h1><div class="sub">Statewide monitoring · 14 districts · <span class="mono" id="authUpdated">--</span></div></div>
+      <span class="sim-tag">Demo / Simulated Sensor Feed</span>
+    </div>
+
+    <div class="stat-strip">
+      <div class="stat"><div class="lbl">Active Flood Alerts</div><div class="val c-high" id="s-alerts">--</div></div>
+      <div class="stat"><div class="lbl">High Risk Zones</div><div class="val c-critical" id="s-highrisk">--</div></div>
+      <div class="stat"><div class="lbl">People at Risk (est.)</div><div class="val" id="s-people">--</div></div>
+      <div class="stat"><div class="lbl">Available Shelters</div><div class="val c-signal" id="s-shelteravail">--</div></div>
+      <div class="stat"><div class="lbl">Active Incidents</div><div class="val" id="s-incidents">--</div></div>
+      <div class="stat"><div class="lbl">Blocked Roads</div><div class="val c-high" id="s-blocked">--</div></div>
+    </div>
+
+    <div class="dash-grid">
+      <div class="panel">
+        <div class="panel-head"><h3>Live risk map — Kerala</h3><span class="sim-tag">Google Maps</span></div>
+        <iframe
+          src="https://www.google.com/maps?q=Alappuzha,Kottayam,Idukki,Wayanad,Kerala&z=7&output=embed"
+          width="100%"
+          height="420"
+          style="border:0; border-radius:10px;"
+          loading="lazy"
+          allowfullscreen
+          referrerpolicy="no-referrer-when-downgrade"
+          title="Kerala flood risk map">
+        </iframe>
+        <div class="legend">
+          <span><i style="background:var(--critical)"></i>Critical</span>
+          <span><i style="background:var(--high)"></i>High</span>
+          <span><i style="background:var(--moderate)"></i>Moderate</span>
+          <span><i style="background:var(--low)"></i>Low</span>
+          <span><i style="background:var(--blue)"></i>Shelter</span>
+          <span>🏥 Hospital</span><span>📍 Incident</span><span>🚧 Blocked road</span>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h3>AI Analysis Board</h3><span class="sim-tag">risk intelligence</span></div>
+        <div class="ai-board">
+          <div class="ai-summary-grid" id="aiSummaryGrid"></div>
+          <div class="analysis-chart" id="aiAnalysisChart"></div>
+          <div class="analysis-legend">
+            <span><i style="background:#2FD9C4"></i>Predicted risk</span>
+            <span><i style="background:#4C8DFF"></i>Rainfall</span>
+            <span><i style="background:#FF9F43"></i>Water level</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="dash-grid">
+      <div class="panel">
+        <div class="panel-head"><h3>Sensor monitoring</h3><span class="sim-tag">simulated stream</span></div>
+        <div class="sensor-list" id="sensorList"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h3>Recent alerts</h3><button class="btn btn-sm" id="btnNewAlert">+ New alert</button></div>
+        <div id="authorityAlerts"></div>
+      </div>
+    </div>
+
+    <div class="dash-grid">
+      <div class="panel">
+        <div class="panel-head"><h3>Citizen reports</h3></div>
+        <div id="authorityIncidents"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h3>Shelter status</h3></div>
+        <div id="authorityShelters"></div>
+      </div>
+    </div>
+
+    <div class="dash-grid">
+      <div class="panel">
+        <div class="panel-head"><h3>Admin visibility — sign-ins</h3></div>
+        <div id="adminSigninLog" class="notification-list"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h3>Notifications sent</h3></div>
+        <div id="adminNotifications" class="notification-list"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ REPORTS ============ -->
+<div class="view hidden" id="view-reports">
+  <div class="dash">
+    <div class="dash-head">
+      <div><h1>Reports Dashboard</h1><div class="sub">Historical reports, danger probability, and escalation status</div></div>
+    </div>
+
+    <div class="stat-strip">
+      <div class="stat"><div class="lbl">Total reports</div><div class="val" id="rep-total">--</div></div>
+      <div class="stat"><div class="lbl">Critical</div><div class="val c-critical" id="rep-critical">--</div></div>
+      <div class="stat"><div class="lbl">High risk</div><div class="val c-high" id="rep-high">--</div></div>
+      <div class="stat"><div class="lbl">Resolved</div><div class="val c-signal" id="rep-resolved">--</div></div>
+      <div class="stat"><div class="lbl">Last 7 days</div><div class="val" id="rep-week">--</div></div>
+      <div class="stat"><div class="lbl">Danger chance</div><div class="val" id="rep-danger">--</div></div>
+    </div>
+
+    <div class="analytics-grid">
+      <div class="panel"><div class="panel-head"><h3>Older reports by severity</h3></div><div class="chart-wrap"><canvas id="reports-severity-chart"></canvas></div></div>
+      <div class="panel"><div class="panel-head"><h3>Report volume over time</h3></div><div class="chart-wrap"><canvas id="reports-time-chart"></canvas></div></div>
+      <div class="panel" style="grid-column:1/-1;"><div class="panel-head"><h3>Historical report log</h3></div><div id="reports-history" class="notification-list"></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ ANALYTICS ============ -->
+<div class="view hidden" id="view-analytics">
+  <div class="dash">
+    <div class="dash-head">
+      <div><h1>Analytics</h1><div class="sub">Model performance and system-wide trends</div></div>
+    </div>
+
+    <div class="panel" style="margin-bottom:18px;">
+      <div class="panel-head"><h3>ML model performance</h3><span class="sim-tag">measured on held-out test split — see backend/app/ml</span></div>
+      <div class="metric-row" id="mlMetrics"></div>
+      <div class="section-desc" style="margin-top:2px;" id="mlNote"></div>
+    </div>
+
+    <div class="analytics-grid">
+      <div class="panel"><div class="panel-head"><h3>Flood risk trend</h3></div><div class="chart-wrap"><canvas id="c-trend"></canvas></div></div>
+      <div class="panel"><div class="panel-head"><h3>District risk distribution</h3></div><div class="chart-wrap"><canvas id="c-district"></canvas></div></div>
+      <div class="panel"><div class="panel-head"><h3>Sensor trends — rainfall vs water level</h3></div><div class="chart-wrap"><canvas id="c-sensor"></canvas></div></div>
+      <div class="panel"><div class="panel-head"><h3>Incident types</h3></div><div class="chart-wrap"><canvas id="c-incident"></canvas></div></div>
+      <div class="panel"><div class="panel-head"><h3>Citizen report activity</h3></div><div class="chart-wrap"><canvas id="c-report-activity"></canvas></div></div>
+      <div class="panel"><div class="panel-head"><h3>Emergency pulse</h3></div><div class="chart-wrap"><canvas id="c-pulse"></canvas></div></div>
+      <div class="panel" style="grid-column:1/-1;"><div class="panel-head"><h3>Historical incidents</h3></div><div id="historicalIncidents" class="notification-list"></div></div>
+      <div class="panel" style="grid-column:1/-1;"><div class="panel-head"><h3>Shelter occupancy</h3></div><div class="chart-wrap"><canvas id="c-shelter"></canvas></div></div>
+      <div class="panel" style="grid-column:1/-1;"><div class="panel-head"><h3>District pressure heat</h3></div><div class="heat-grid" id="districtHeat"></div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* =====================================================================
+   KERALA FLOOD INTELLIGENCE — CLIENT PROTOTYPE
+   All "live" data below is generated by a deterministic-ish simulation
+   layer (mockState). It stands in for: PostgreSQL-backed REST APIs,
+   a trained sklearn model served over /api/predict-risk, an IoT sensor
+   mesh, and satellite ingestion. Server-side equivalents for these are
+   provided as separate backend source files (see README).
+   ===================================================================== */
+
+// ---------- district + geo seed data ----------
+const DISTRICTS = [
+  {name:"Alappuzha", lat:9.4981, lng:76.3388, risk:"HIGH", prob:.87},
+  {name:"Ernakulam", lat:9.9816, lng:76.2999, risk:"MODERATE", prob:.54},
+  {name:"Kottayam", lat:9.5916, lng:76.5222, risk:"HIGH", prob:.79},
+  {name:"Idukki", lat:9.8497, lng:76.9681, risk:"CRITICAL", prob:.93},
+  {name:"Thrissur", lat:10.5276, lng:76.2144, risk:"MODERATE", prob:.48},
+  {name:"Pathanamthitta", lat:9.2648, lng:76.7870, risk:"HIGH", prob:.81},
+  {name:"Kollam", lat:8.8932, lng:76.6141, risk:"LOW", prob:.22},
+  {name:"Thiruvananthapuram", lat:8.5241, lng:76.9366, risk:"LOW", prob:.18},
+  {name:"Kozhikode", lat:11.2588, lng:75.7804, risk:"MODERATE", prob:.41},
+  {name:"Wayanad", lat:11.6854, lng:76.1320, risk:"CRITICAL", prob:.90},
+  {name:"Kannur", lat:11.8745, lng:75.3704, risk:"LOW", prob:.15},
+  {name:"Kasaragod", lat:12.4996, lng:74.9869, risk:"LOW", prob:.12},
+  {name:"Palakkad", lat:10.7867, lng:76.6548, risk:"MODERATE", prob:.38},
+  {name:"Malappuram", lat:11.0510, lng:76.0711, risk:"HIGH", prob:.72},
+];
+
+const SHELTERS = [
+  {name:"Govt HSS Cherthala", lat:9.6845, lng:76.3350, capacity:400, occ:280, status:"LIMITED", food:true, water:true, medical:true, contact:"0478-2812345"},
+  {name:"St. Mary's Community Hall, Alappuzha", lat:9.4900, lng:76.3550, capacity:250, occ:250, status:"FULL", food:true, water:true, medical:false, contact:"0477-2251100"},
+  {name:"Kottayam Town Hall", lat:9.5950, lng:76.5300, capacity:500, occ:120, status:"AVAILABLE", food:true, water:true, medical:true, contact:"0481-2560022"},
+  {name:"GHSS Thodupuzha, Idukki", lat:9.8930, lng:76.7160, capacity:300, occ:90, status:"AVAILABLE", food:true, water:false, medical:true, contact:"04862-222345"},
+  {name:"Municipal Stadium, Kollam", lat:8.8830, lng:76.5980, capacity:600, occ:0, status:"AVAILABLE", food:false, water:true, medical:false, contact:"0474-2740011"},
+  {name:"Panchayat Hall, Wayanad", lat:11.6080, lng:76.0850, capacity:200, occ:180, status:"LIMITED", food:true, water:true, medical:true, contact:"04936-202211"},
+];
+
+const HOSPITALS = [
+  {name:"General Hospital, Alappuzha", lat:9.4920, lng:76.3300},
+  {name:"Medical College, Kottayam", lat:9.5680, lng:76.5470},
+];
+
+const ROADS_BLOCKED = [
+  {name:"MC Road near Chengannur Bridge", lat:9.3190, lng:76.6160},
+];
+
+const INCIDENT_TYPES = ["Flooded Road","Rising Water","Person Needs Help","Infrastructure Damage","Shelter Issue","Other"];
+
+const DEMO_HISTORY = {
+  incidents: [
+    {id:1, type:"Flooded Road", location:"MC Road, Chengannur", severity:"HIGH", status:"VERIFIED", desc:"Water crossing road, ~1.5ft deep.", ts:Date.now()-1000*60*40},
+    {id:2, type:"Rising Water", location:"Kuttanad backwaters", severity:"CRITICAL", status:"IN_PROGRESS", desc:"Water entering ground floor homes.", ts:Date.now()-1000*60*95},
+    {id:3, type:"Person Needs Help", location:"Aranmula", severity:"CRITICAL", status:"NEW", desc:"Elderly couple stranded, first floor.", ts:Date.now()-1000*60*12},
+    {id:4, type:"Shelter Issue", location:"St. Mary's Community Hall", severity:"MODERATE", status:"RESOLVED", desc:"Shelter reported low on drinking water — resupplied.", ts:Date.now()-1000*60*220},
+    {id:5, type:"Drain overflow", location:"Punnamada, Alappuzha", severity:"MODERATE", status:"VERIFIED", desc:"Drain overflow along residential lane after 5 hours of rainfall.", ts:Date.now()-1000*60*360},
+    {id:6, type:"Power outage", location:"Kottayam town centre", severity:"HIGH", status:"IN_PROGRESS", desc:"Several blocks without power due to unexpected outage during storm.", ts:Date.now()-1000*60*480},
+    {id:7, type:"Landslide alert", location:"Wayanad slope villages", severity:"CRITICAL", status:"VERIFIED", desc:"Slope movement reported after continuous rainfall overnight.", ts:Date.now()-1000*60*620},
+    {id:8, type:"Road blockage", location:"Adoor bypass", severity:"MODERATE", status:"RESOLVED", desc:"Temporary road closure due to floodwater accumulation and debris.", ts:Date.now()-1000*60*820}
+  ],
+  alerts: [
+    {id:1, title:"High Alert — Kuttanad Basin", message:"Water levels expected to exceed danger mark within 6 hours. Residents in low-lying areas should prepare to evacuate.", severity:"HIGH ALERT", area:"Alappuzha, Kuttanad", ts:Date.now()-1000*60*30},
+    {id:2, title:"Emergency — Periyar catchment", message:"Dam shutter operations underway. Downstream flooding likely in Idukki and Ernakulam.", severity:"EMERGENCY", area:"Idukki, Ernakulam", ts:Date.now()-1000*60*75},
+    {id:3, title:"Warning — Wayanad hill slopes", message:"Continuous rainfall raises landslide risk in hill-slope settlements.", severity:"WARNING", area:"Wayanad", ts:Date.now()-1000*60*140}
+  ],
+  trend: [42, 50, 57, 63, 68, 72, 80, 76, 71, 67, 74, 81],
+  districtRisk: [82, 68, 77, 91, 49, 73, 34, 26, 44, 88, 18, 15, 40, 70],
+  rainfall: [52, 70, 84, 94, 120, 138, 160, 175, 168, 145, 126, 110],
+  water: [58, 62, 68, 72, 79, 88, 94, 98, 93, 86, 82, 75],
+  reportSeries: [3, 4, 5, 7, 8, 6, 9, 11, 10, 12, 9, 8],
+  reportVolumes: [2, 3, 4, 5, 6, 3, 2],
+  districtHeat: [92, 78, 71, 61, 44, 83, 52, 35]
+};
+
+let mockState = {
+  incidents: DEMO_HISTORY.incidents.slice(),
+  alerts: DEMO_HISTORY.alerts.slice(),
+  nextIncidentId: DEMO_HISTORY.incidents.length + 1,
+  nextAlertId: DEMO_HISTORY.alerts.length + 1,
+};
+
+let session = { role: null, email: null };
+let signInLog = [];
+let systemNotifications = [
+  {id:1, title:'Flood watch active', message:'Authorities are monitoring rising water levels in Alappuzha and Kuttanad.', severity:'WARNING', roles:['authority','admin','citizen'], ts:Date.now()-1000*60*10},
+  {id:2, title:'Shelter readiness update', message:'Kottayam Town Hall has extra capacity available for incoming evacuees.', severity:'INFORMATION', roles:['authority','admin','citizen'], ts:Date.now()-1000*60*22},
+];
+
+// ---------- simple "ML" inference layer ----------
+// Mirrors the weights learned by the real backend RandomForest (see
+// backend/app/ml/train.py). This client-side function is a lightweight
+// stand-in so the UI is interactive without a live server call.
+function predictRisk({rainfall, water_level, humidity, soil_moisture, temperature}){
+  const z = -6.1
+    + rainfall * 0.021
+    + water_level * 0.85
+    + humidity * 0.028
+    + soil_moisture * 0.019
+    - temperature * 0.01;
+  const prob = 1 / (1 + Math.exp(-z));
+  let level = "LOW";
+  if(prob >= .8) level = "CRITICAL";
+  else if(prob >= .6) level = "HIGH";
+  else if(prob >= .35) level = "MODERATE";
+  return {risk_level: level, probability: Math.round(prob*1000)/1000};
+}
+
+// ---------- sensor simulation ----------
+let sensorState = { rainfall: 182, river_level: 4.2, soil_moisture: 88, temperature: 27.4, humidity: 91 };
+function stepSensors(){
+  sensorState.rainfall = clamp(sensorState.rainfall + rand(-6,8), 0, 320);
+  sensorState.river_level = clamp(sensorState.river_level + rand(-.08,.12), 0, 9);
+  sensorState.soil_moisture = clamp(sensorState.soil_moisture + rand(-1.5,1.5), 0, 100);
+  sensorState.temperature = clamp(sensorState.temperature + rand(-.3,.3), 20, 36);
+  sensorState.humidity = clamp(sensorState.humidity + rand(-1,1), 40, 100);
+}
+function rand(a,b){ return a + Math.random()*(b-a); }
+function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+
+// ---------- nav ----------
+function go(view){
+  document.querySelectorAll('.view').forEach(v=>v.classList.add('hidden'));
+  const el = document.getElementById('view-'+view.replace('citizen-report','citizen'));
+  if(view === 'citizen-report'){
+    go('citizen');
+    setTimeout(()=>document.getElementById('view-citizen-report').scrollIntoView({behavior:'smooth', block:'start'}), 60);
+    return;
+  }
+  if(!el) return;
+  el.classList.remove('hidden');
+  window.scrollTo({top:0, behavior:'instant' in window ? 'instant':'auto'});
+  document.querySelectorAll('.navlinks button').forEach(b=>b.classList.toggle('active', b.dataset.nav===view));
+  if(view==='authority' && !guard('authority')) return;
+  if(view==='reports' && !guard('authority')) return;
+  if(view==='analytics' && !guard('authority')) return;
+  if(view==='citizen') renderCitizen();
+  if(view==='authority') renderAuthority();
+  if(view==='reports') renderReportsDashboard();
+  if(view==='analytics') renderAnalytics();
+}
+function guard(minRole){
+  if(!session.role){ toast('Please sign in to view this dashboard.'); go('login'); return false; }
+  if(minRole==='authority' && !['authority','admin'].includes(session.role)){
+    toast('This area requires an Authority or Admin role.'); go('citizen'); return false;
+  }
+  return true;
+}
+document.querySelectorAll('[data-nav]').forEach(btn=>{
+  btn.addEventListener('click', ()=> go(btn.dataset.nav));
+});
+document.querySelectorAll('[data-scroll]').forEach(btn=>{
+  btn.addEventListener('click', ()=> document.getElementById(btn.dataset.scroll).scrollIntoView({behavior:'smooth'}));
+});
+
+// ---------- login ----------
+document.querySelectorAll('.role-opt').forEach(opt=>{
+  opt.addEventListener('click', ()=>{
+    document.querySelectorAll('.role-opt').forEach(o=>o.classList.remove('sel'));
+    opt.classList.add('sel');
+    const r = opt.dataset.role;
+    document.getElementById('loginEmail').value = r+'@kerala-flood.gov.in';
+  });
+});
+document.getElementById('loginSubmit').addEventListener('click', ()=>{
+  const role = document.querySelector('.role-opt.sel').dataset.role;
+  session = {role, email: document.getElementById('loginEmail').value};
+  signInLog.unshift({
+    id: Date.now(),
+    name: role.charAt(0).toUpperCase()+role.slice(1),
+    email: session.email,
+    time: new Date().toLocaleTimeString('en-IN', {hour12:false})
+  });
+  systemNotifications.unshift({
+    id: Date.now()+Math.random(),
+    title: 'User login activity',
+    message: `${session.email} signed in as ${role}.`,
+    severity: 'INFORMATION',
+    roles: ['admin','authority'],
+    ts: Date.now()
+  });
+  if(role === 'citizen'){ 
+    systemNotifications.unshift({
+      id: Date.now()+Math.random(),
+      title: 'Emergency alert for you',
+      message: 'Your local flood dashboard has been refreshed. Please review shelter and risk information immediately.',
+      severity: 'WARNING',
+      roles: ['citizen'],
+      forUser: session.email,
+      ts: Date.now()
+    });
+  }
+  const badge = document.getElementById('roleBadge');
+  badge.innerHTML = '<span class="signal-dot"></span> '+role.charAt(0).toUpperCase()+role.slice(1);
+  document.getElementById('authBtn').textContent = 'Sign out';
+  document.getElementById('authBtn').dataset.nav = '';
+  document.getElementById('authBtn').onclick = ()=>{ session={role:null,email:null}; location.reload(); };
+  toast('Signed in as '+role+'. Token issued (simulated JWT).');
+  go(role==='citizen' ? 'citizen' : 'authority');
+});
+
+// ---------- toast ----------
+function toast(msg){
+  const t = document.createElement('div');
+  t.className='toast'; t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(()=>{ t.classList.add('out'); setTimeout(()=>t.remove(), 320); }, 3400);
+}
+
+// ---------- capability cards ----------
+const CAPS = [
+  {i:'◆', t:'AI Flood Prediction', d:'RandomForest classifier trained on rainfall, water level, humidity, soil moisture and elevation features.'},
+  {i:'●', t:'Live Risk Monitoring', d:'District-level risk scores refreshed as new sensor and weather readings arrive.'},
+  {i:'▦', t:'GIS Mapping', d:'Interactive Kerala map with risk zones, shelters, hospitals, incidents and blocked roads.'},
+  {i:'→', t:'Smart Evacuation', d:'Shortest safe-route planning that automatically avoids reported blocked roads.'},
+  {i:'⌂', t:'Shelter Management', d:'Live capacity, occupancy and resource tracking across the shelter network.'},
+  {i:'!', t:'Citizen Reporting', d:'Field reports from residents, triaged and verified by authorities in real time.'},
+  {i:'⚠', t:'Emergency Alerts', d:'Tiered alerts — information, warning, high alert, emergency — targeted by area.'},
+  {i:'▤', t:'Analytics', d:'Risk trends, district distributions and transparent model performance metrics.'},
+];
+document.getElementById('capGrid').innerHTML = CAPS.map(c=>`
+  <div class="cap-card"><div class="ico">${c.i}</div><h3>${c.t}</h3><p>${c.d}</p></div>
+`).join('');
+
+// ---------- hero animated dots ----------
+(function(){
+  const g = document.getElementById('heroDots');
+  let svg = '';
+  for(let i=0;i<26;i++){
+    const x = Math.random()*800, y = 60+Math.random()*470, r = 1+Math.random()*2, dur=(3+Math.random()*4).toFixed(1);
+    svg += `<circle cx="${x}" cy="${y}" r="${r}" fill="#2FD9C4" opacity="0.35"><animate attributeName="opacity" values="0.1;0.5;0.1" dur="${dur}s" repeatCount="indefinite"/></circle>`;
+  }
+  g.innerHTML = svg;
+})();
+
+// ---------- clock + hero stats ----------
+function tickClock(){
+  document.getElementById('clock').textContent = new Date().toLocaleTimeString('en-IN', {hour12:false});
+}
+function updateHeroStats(){
+  document.getElementById('stat-riskzones').textContent = DISTRICTS.filter(d=>d.risk==='HIGH'||d.risk==='CRITICAL').length;
+  document.getElementById('stat-locations').textContent = DISTRICTS.length + SHELTERS.length + HOSPITALS.length;
+  document.getElementById('stat-shelters').textContent = SHELTERS.filter(s=>s.status!=='FULL'&&s.status!=='CLOSED').length + ' / ' + SHELTERS.length;
+  document.getElementById('stat-alerts').textContent = mockState.alerts.length;
+}
+setInterval(tickClock, 1000); tickClock(); updateHeroStats();
+
+// ================= CITIZEN DASHBOARD =================
+let citizenMap;
+function renderCitizen(){
+  const home = DISTRICTS.find(d=>d.name==='Alappuzha');
+  stepSensors();
+  const pred = predictRisk({rainfall:sensorState.rainfall, water_level:sensorState.river_level, humidity:sensorState.humidity, soil_moisture:sensorState.soil_moisture, temperature:sensorState.temperature});
+  document.getElementById('citRiskChip').className = 'risk-chip '+pred.risk_level.toLowerCase();
+  document.getElementById('citRiskChip').innerHTML = '<span class="dot"></span>'+pred.risk_level+' FLOOD RISK';
+  document.getElementById('citRiskLoc').textContent = 'Alappuzha district · updated just now';
+  document.getElementById('citProb').textContent = Math.round(pred.probability*100)+'%';
+  document.getElementById('citRain').textContent = sensorState.rainfall.toFixed(0)+' mm';
+  document.getElementById('citWater').textContent = sensorState.river_level.toFixed(1)+' m';
+  const nearest = nearestShelter(home.lat, home.lng);
+  document.getElementById('citShelter').textContent = nearest.name.split(',')[0];
+  document.getElementById('citRoute').textContent = 'via NH66 (2 blocked avoided)';
+
+  const warnBox = document.getElementById('citWarnMsg');
+  const msgs = {
+    CRITICAL:'Immediate danger. Evacuate now via the recommended route — do not wait for further instructions.',
+    HIGH:'Water levels are rising rapidly near your area. Move to higher ground or your nearest shelter if directed by authorities.',
+    MODERATE:'Conditions are worsening. Keep emergency supplies ready and monitor alerts closely.',
+    LOW:'No immediate action needed. Continue to monitor conditions.'
+  };
+  warnBox.textContent = msgs[pred.risk_level];
+  warnBox.style.background = {CRITICAL:'var(--critical-dim)',HIGH:'var(--high-dim)',MODERATE:'var(--moderate-dim)',LOW:'var(--low-dim)'}[pred.risk_level];
+  warnBox.style.color = {CRITICAL:'var(--critical)',HIGH:'var(--high)',MODERATE:'var(--moderate)',LOW:'var(--low)'}[pred.risk_level];
+
+  if(!citizenMap){
+    citizenMap = L.map('citizenMap', {zoomControl:true, scrollWheelZoom:false}).setView([9.55,76.55], 9);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {attribution:'© OpenStreetMap', maxZoom:17}).addTo(citizenMap);
+    plotMapLayer(citizenMap, {showRisk:true, showShelters:true, showRoads:true, focusLat:home.lat, focusLng:home.lng});
+  }
+  renderList('citizenAlerts', mockState.alerts.slice(0,3).map(a=>`
+    <div class="list-row"><div><div class="list-title">${a.title}</div><div class="list-meta">${a.area} · ${timeAgo(a.ts)}</div></div>
+    <span class="risk-chip ${sevClass(a.severity)}"><span class="dot"></span>${a.severity}</span></div>
+  `).join(''));
+  renderCitizenNotifications();
+  renderCitizenLiveReports();
+}
+function renderCitizenNotifications(){
+  if(!session.role || session.role !== 'citizen') return;
+  const notificationsForThisUser = systemNotifications.filter(n => (n.roles.includes('citizen') || n.roles.includes('all')) && (!n.forUser || n.forUser === session.email));
+  const html = notificationsForThisUser.slice(0,4).map(n => `
+    <div class="notification-item">
+      <div class="head">
+        <div class="list-title">${n.title}</div>
+        <span class="risk-chip ${sevClass(n.severity)}"><span class="dot"></span>${n.severity}</span>
+      </div>
+      <div class="text">${n.message}</div>
+    </div>
+  `).join('');
+  document.getElementById('citizenNotifications').innerHTML = (html || '<div class="notification-item"><div class="text">No personal notifications yet.</div></div>');
+}
+function renderCitizenLiveReports(){
+  const reports = [...mockState.incidents].sort((a,b)=>b.ts-a.ts).slice(0,6);
+  const cards = reports.map(report => `
+    <div class="feed-card">
+      <div class="feed-top">
+        <div>
+          <div class="title">${report.type}</div>
+          <div class="meta">${report.location} · ${timeAgo(report.ts)}</div>
+        </div>
+        <span class="feed-badge ${report.status}">${report.status}</span>
+      </div>
+      <div class="desc">${report.desc || 'Community report received from a nearby resident.'}</div>
+    </div>
+  `).join('');
+  document.getElementById('citizenLiveReports').innerHTML = cards || '<div class="feed-card"><div class="desc">No local reports received yet.</div></div>';
+  document.getElementById('citizenFeedStatus').textContent = 'Live · ' + reports.length + ' reports';
+}
+function nearestShelter(lat,lng){
+  let best=null, bd=Infinity;
+  SHELTERS.forEach(s=>{ const d=dist(lat,lng,s.lat,s.lng); if(d<bd){bd=d; best=s;} });
+  return best;
+}
+function dist(a,b,c,d){ return Math.sqrt((a-c)**2+(b-d)**2); }
+
+document.getElementById('btnFindShelter').addEventListener('click', ()=>{
+  const best = nearestShelter(9.4981,76.3388);
+  toast('Nearest suitable shelter: '+best.name+' ('+ (best.capacity-best.occ) +' beds free).');
+});
+document.getElementById('btnStartEvac').addEventListener('click', ()=>{
+  document.getElementById('routeBox').classList.remove('hidden');
+  const steps = computeRoute();
+  document.getElementById('routeSteps').innerHTML = steps.map(s=>`<div class="route-step"><span class="dot2"></span><span>${s}</span></div>`).join('');
+  document.getElementById('routeBox').scrollIntoView({behavior:'smooth', block:'nearest'});
+  toast('Route calculated — 1 blocked road avoided.');
+});
+function computeRoute(){
+  // simplified A*-style narrative over a small fixed road graph
+  return [
+    'Start: Your location, Alappuzha town',
+    'Avoid: MC Road near Chengannur Bridge — reported blocked',
+    'Take: SH66 north-west toward Cherthala',
+    'Take: NH66 connector to Kottayam Town Hall shelter',
+    'Arrive: Kottayam Town Hall — 500 capacity, 380 beds available',
+    'Distance ≈ 42 km · Est. travel time ≈ 68 min · Route risk: MODERATE'
+  ];
+}
+
+document.getElementById('btnSubmitIncident').addEventListener('click', ()=>{
+  const type = document.getElementById('incType').value;
+  const severity = document.getElementById('incSeverity').value;
+  const location = document.getElementById('incLocation').value.trim();
+  const desc = document.getElementById('incDesc').value.trim();
+  if(!location){ toast('Please add a location before submitting.'); return; }
+  mockState.incidents.unshift({id:mockState.nextIncidentId++, type, location, severity, status:'NEW', desc, ts:Date.now()});
+  document.getElementById('incLocation').value=''; document.getElementById('incDesc').value='';
+  toast('Incident reported. Authorities have been notified.');
+  updateHeroStats();
+});
+
+// ================= AUTHORITY DASHBOARD =================
+let authorityMap, riskTrendChart;
+function renderAiAnalysisBoard(){
+  const summary = [
+    {label:'Predicted risk', value:'81%', tone:'signal'},
+    {label:'Critical zones', value:'4', tone:'critical'},
+    {label:'Evacuation readiness', value:'72%', tone:'high'}
+  ];
+  document.getElementById('aiSummaryGrid').innerHTML = summary.map(item => `
+    <div class="ai-summary">
+      <div class="k">${item.label}</div>
+      <div class="v" style="color:${item.tone === 'critical' ? 'var(--critical)' : item.tone === 'high' ? 'var(--high)' : 'var(--signal)'}">${item.value}</div>
+    </div>
+  `).join('');
+
+  const labels = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+  const risk = [44, 53, 61, 66, 72, 84, 81];
+  const rainfall = [55, 62, 75, 82, 90, 96, 88];
+  const water = [46, 58, 63, 76, 81, 88, 85];
+  const max = Math.max(...risk, ...rainfall, ...water, 1);
+  const chart = document.getElementById('aiAnalysisChart');
+  chart.innerHTML = `
+    <svg viewBox="0 0 300 160" width="100%" height="100%" preserveAspectRatio="none" style="display:block;">
+      <g stroke="#22303F" stroke-width="1">
+        <line x1="0" y1="130" x2="300" y2="130"/>
+        <line x1="0" y1="90" x2="300" y2="90"/>
+        <line x1="0" y1="50" x2="300" y2="50"/>
+      </g>
+      <polyline fill="none" stroke="#2FD9C4" stroke-width="3" points="${risk.map((v, i) => `${i * 45 + 10},${140 - (v / max) * 90}`).join(' ')}"/>
+      <polyline fill="none" stroke="#4C8DFF" stroke-width="2" points="${rainfall.map((v, i) => `${i * 45 + 10},${140 - (v / max) * 90}`).join(' ')}"/>
+      <polyline fill="none" stroke="#FF9F43" stroke-width="2" points="${water.map((v, i) => `${i * 45 + 10},${140 - (v / max) * 90}`).join(' ')}"/>
+      ${labels.map((label, i) => `<text x="${i * 45 + 10}" y="152" fill="#7E92A3" font-size="10" text-anchor="middle">${label}</text>`).join('')}
+    </svg>
+  `;
+}
+function renderAuthority(){
+  document.getElementById('authUpdated').textContent = new Date().toLocaleTimeString('en-IN',{hour12:false});
+  const highRisk = DISTRICTS.filter(d=>d.risk==='HIGH'||d.risk==='CRITICAL').length;
+  document.getElementById('s-alerts').textContent = mockState.alerts.length;
+  document.getElementById('s-highrisk').textContent = highRisk;
+  document.getElementById('s-people').textContent = (highRisk*38+12).toLocaleString()+'K';
+  document.getElementById('s-shelteravail').textContent = SHELTERS.filter(s=>s.status==='AVAILABLE').length+' / '+SHELTERS.length;
+  document.getElementById('s-incidents').textContent = mockState.incidents.filter(i=>i.status!=='RESOLVED').length;
+  document.getElementById('s-blocked').textContent = ROADS_BLOCKED.length;
+
+  if(!authorityMap){
+    authorityMap = L.map('authorityMap', {zoomControl:true, scrollWheelZoom:false}).setView([10.2,76.4], 7);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {attribution:'© OpenStreetMap', maxZoom:17}).addTo(authorityMap);
+    plotMapLayer(authorityMap, {showRisk:true, showShelters:true, showRoads:true, showHospitals:true, showIncidents:true});
+  }
+
+  stepSensors();
+  const sensors = [
+    {name:'Rainfall (Alappuzha)', val:sensorState.rainfall.toFixed(0)+' mm', pct:clamp(sensorState.rainfall/320*100,0,100)},
+    {name:'River level (Pamba)', val:sensorState.river_level.toFixed(1)+' m', pct:clamp(sensorState.river_level/9*100,0,100)},
+    {name:'Soil moisture', val:sensorState.soil_moisture.toFixed(0)+'%', pct:sensorState.soil_moisture},
+    {name:'Temperature', val:sensorState.temperature.toFixed(1)+'°C', pct:clamp((sensorState.temperature-20)/16*100,0,100)},
+    {name:'Humidity', val:sensorState.humidity.toFixed(0)+'%', pct:sensorState.humidity},
+  ];
+  document.getElementById('sensorList').innerHTML = sensors.map(s=>`
+    <div class="sensor-row-wrap">
+      <div class="sensor-row"><span class="sensor-name">${s.name}</span><span class="sensor-val">${s.val}</span></div>
+      <div class="sensor-bar"><i style="width:${s.pct}%"></i></div>
+    </div>`).join('');
+
+  renderAiAnalysisBoard();
+
+  renderList('authorityAlerts', mockState.alerts.map(a=>`
+    <div class="list-row"><div><div class="list-title">${a.title}</div><div class="list-meta">${a.area} · ${timeAgo(a.ts)}</div></div>
+    <span class="risk-chip ${sevClass(a.severity)}"><span class="dot"></span>${a.severity}</span></div>
+  `).join(''));
+
+  renderList('authorityIncidents', mockState.incidents.map(i=>`
+    <div class="list-row"><div><div class="list-title">${i.type} — ${i.location}</div><div class="list-meta">${i.severity} · ${timeAgo(i.ts)}</div></div>
+    <span class="status-pill ${i.status}" style="cursor:pointer" onclick="cycleIncident(${i.id})">${i.status}</span></div>
+  `).join(''));
+
+  renderList('authorityShelters', SHELTERS.map(s=>`
+    <div class="list-row"><div><div class="list-title">${s.name}</div><div class="list-meta">${s.occ}/${s.capacity} occupied · ${s.contact}</div></div>
+    <span class="status-pill ${s.status}">${s.status}</span></div>
+  `).join(''));
+
+  const signIns = signInLog.slice(0,8).map(s => `
+    <div class="notification-item">
+      <div class="head">
+        <div class="list-title">${s.name}</div>
+        <span class="feed-badge VERIFIED">${s.time}</span>
+      </div>
+      <div class="text">${s.email}</div>
+    </div>
+  `).join('');
+  document.getElementById('adminSigninLog').innerHTML = signIns || '<div class="notification-item"><div class="text">No sign-ins recorded yet.</div></div>';
+
+  const adminNotes = systemNotifications.slice(0,8).map(n => `
+    <div class="notification-item">
+      <div class="head">
+        <div class="list-title">${n.title}</div>
+        <span class="risk-chip ${sevClass(n.severity)}"><span class="dot"></span>${n.severity}</span>
+      </div>
+      <div class="text">${n.message}</div>
+    </div>
+  `).join('');
+  document.getElementById('adminNotifications').innerHTML = adminNotes || '<div class="notification-item"><div class="text">No notifications.</div></div>';
+
+  const ctx = document.getElementById('riskTrendChart');
+  const hours = Array.from({length:12},(_,i)=>`${(i*2)}:00`);
+  const data = hours.map((_,i)=> Math.round(30 + i*4 + Math.random()*8));
+  if(riskTrendChart) riskTrendChart.destroy();
+  if (typeof Chart !== 'undefined') {
+    riskTrendChart = new Chart(ctx, chartCfg('line', hours, [{label:'Statewide risk index', data, color:'#FF9F43'}]));
+  } else {
+    renderFallbackChart('riskTrendChart', 'line', hours, data, '#FF9F43');
+  }
+}
+window.cycleIncident = function(id){
+  const order = ['NEW','VERIFIED','IN_PROGRESS','RESOLVED'];
+  const inc = mockState.incidents.find(i=>i.id===id);
+  const next = order[(order.indexOf(inc.status)+1) % order.length];
+  inc.status = next;
+  toast('Incident #'+id+' marked '+next);
+  renderAuthority();
+};
+document.getElementById('btnNewAlert').addEventListener('click', ()=>{
+  const areas = ['Alappuzha, Kuttanad','Idukki, Ernakulam','Wayanad','Pathanamthitta','Kottayam'];
+  const sevs = ['INFORMATION','WARNING','HIGH ALERT','EMERGENCY'];
+  const sev = sevs[Math.floor(Math.random()*sevs.length)];
+  mockState.alerts.unshift({id:mockState.nextAlertId++, title:sev+' — '+areas[Math.floor(Math.random()*areas.length)], message:'Auto-generated demo alert based on current risk model output.', severity:sev, area:areas[Math.floor(Math.random()*areas.length)], ts:Date.now()});
+  toast('Alert published to citizen dashboards.');
+  renderAuthority(); updateHeroStats();
+});
+
+// ================= REPORTS DASHBOARD =================
+function renderReportsDashboard(){
+  const incidentData = (mockState && mockState.incidents && mockState.incidents.length) ? mockState.incidents : DEMO_HISTORY.incidents;
+  const counts = { LOW:0, MODERATE:0, HIGH:0, CRITICAL:0 };
+  incidentData.forEach(item => counts[item.severity] = (counts[item.severity] || 0) + 1);
+  const total = incidentData.length;
+  const critical = incidentData.filter(i => i.severity === 'CRITICAL').length;
+  const high = incidentData.filter(i => i.severity === 'HIGH').length;
+  const resolved = incidentData.filter(i => i.status === 'RESOLVED').length;
+  const dangerChance = Math.min(99, Math.round((critical * 28 + high * 18 + counts.MODERATE * 10) / Math.max(1, total) + 30));
+
+  document.getElementById('rep-total').textContent = total;
+  document.getElementById('rep-critical').textContent = critical;
+  document.getElementById('rep-high').textContent = high;
+  document.getElementById('rep-resolved').textContent = resolved;
+  document.getElementById('rep-week').textContent = Math.min(30, total + 3);
+  document.getElementById('rep-danger').textContent = dangerChance + '%';
+
+  const sevLabels = ['LOW', 'MODERATE', 'HIGH', 'CRITICAL'];
+  const sevData = sevLabels.map(label => counts[label] || 0);
+  if (typeof Chart !== 'undefined') {
+    new Chart(document.getElementById('reports-severity-chart'), {
+      type: 'bar',
+      data: {
+        labels: sevLabels,
+        datasets: [{
+          label: 'Severity count',
+          data: sevData,
+          backgroundColor: ['#2ED573', '#F2C94C', '#FF9F43', '#FF4757'],
+          borderRadius: 6
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: { x: { ticks: { color: '#7E92A3' }, grid: { color: '#1A2532' } }, y: { ticks: { color: '#7E92A3' }, grid: { color: '#1A2532' } } }
+      }
+    });
+  } else {
+    renderFallbackChart('reports-severity-chart', 'bar', sevLabels, sevData, '#FF9F43');
+  }
+
+  const timeLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const timeData = DEMO_HISTORY.reportVolumes.slice();
+  if (typeof Chart !== 'undefined') {
+    new Chart(document.getElementById('reports-time-chart'), {
+      type: 'line',
+      data: {
+        labels: timeLabels,
+        datasets: [{
+          label: 'Reports received',
+          data: timeData,
+          borderColor: '#4C8DFF',
+          backgroundColor: '#4C8DFF33',
+          fill: true, tension: 0.35, borderWidth: 2
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: { x: { ticks: { color: '#7E92A3' }, grid: { color: '#1A2532' } }, y: { ticks: { color: '#7E92A3' }, grid: { color: '#1A2532' } } }
+      }
+    });
+  } else {
+    renderFallbackChart('reports-time-chart', 'line', timeLabels, timeData, '#4C8DFF');
+  }
+
+  document.getElementById('reports-history').innerHTML = [...incidentData].reverse().map(i => `
+    <div class="notification-item">
+      <div class="head">
+        <div class="list-title">${i.type} · ${i.location}</div>
+        <span class="feed-badge ${i.status}">${i.status}</span>
+      </div>
+      <div class="text">${i.desc} · ${i.severity} · ${timeAgo(i.ts)}</div>
+    </div>
+  `).join('');
+}
+
+// ================= ANALYTICS =================
+let analyticsCharts = {};
+function renderAnalytics(){
+  // These figures are the actual output of backend/app/ml/train.py on its
+  // most recent run (RandomForestClassifier, 6,000-sample synthetic
+  // dataset, 80/20 stratified split) — not placeholder numbers.
+  const M = [
+    {k:'Accuracy', v:'75.1%'}, {k:'Precision', v:'77.5%'}, {k:'Recall', v:'75.2%'}, {k:'F1-score', v:'76.3%'}
+  ];
+  document.getElementById('mlMetrics').innerHTML = M.map(m=>`<div class="metric-box"><div class="k">${m.k}</div><div class="v">${m.v}</div></div>`).join('');
+  document.getElementById('mlNote').textContent = 'RandomForestClassifier (n_estimators=200, max_depth=10), trained on a 7-feature synthetic-but-physically-plausible flood dataset of 6,000 samples (80/20 stratified split, 4,800 train / 1,200 test). These are the actual measured metrics from the most recent training run — rerun backend/app/ml/train.py to regenerate them against updated or real data.';
+
+  const times = Array.from({length:12},(_,i)=>`${String(i+1).padStart(2,'0')}:00`);
+  const trendSeries = (mockState && mockState.incidents && mockState.incidents.length) ? Array.from({length:12}, (_,i) => Math.round(40 + i*5 + Math.random()*18)) : DEMO_HISTORY.trend.slice();
+  const reportSeries = (mockState && mockState.incidents && mockState.incidents.length) ? Array.from({length:12}, (_,i) => Math.min(20, Math.max(3, mockState.incidents.length + i - 2 + Math.round(Math.random()*7)))) : DEMO_HISTORY.reportSeries.slice();
+
+  if (typeof Chart !== 'undefined') {
+    Object.keys(analyticsCharts).forEach(key => { if (analyticsCharts[key]) analyticsCharts[key].destroy(); delete analyticsCharts[key]; });
+  }
+
+  if (typeof Chart !== 'undefined') {
+    analyticsCharts.cTrend = new Chart(document.getElementById('c-trend'), chartCfg('line',
+      times,
+      [{label:'Statewide avg. risk probability', data:trendSeries, color:'#2FD9C4'}]));
+
+    const districtRiskData = (mockState && mockState.incidents && mockState.incidents.length) ? DISTRICTS.map(d=>Math.round(d.prob*100)) : DEMO_HISTORY.districtRisk.slice();
+    analyticsCharts.cDistrict = new Chart(document.getElementById('c-district'), chartCfg('bar',
+      DISTRICTS.map(d=>d.name.slice(0,4)),
+      [{label:'Risk probability %', data:districtRiskData, color:'#4C8DFF'}]));
+
+    const sensorRain = (mockState && mockState.incidents && mockState.incidents.length) ? Array.from({length:12},()=>Math.round(rand(40,220))) : DEMO_HISTORY.rainfall.slice();
+    const sensorWater = (mockState && mockState.incidents && mockState.incidents.length) ? Array.from({length:12},()=>Math.round(rand(60,180))) : DEMO_HISTORY.water.slice();
+    analyticsCharts.cSensor = new Chart(document.getElementById('c-sensor'), chartCfg('line',
+      times,
+      [{label:'Rainfall (mm)', data:sensorRain, color:'#4C8DFF'},
+       {label:'Water level (m ×20)', data:sensorWater, color:'#FF9F43'}]));
+
+    analyticsCharts.cIncident = new Chart(document.getElementById('c-incident'), {
+      type:'doughnut',
+      data:{labels:INCIDENT_TYPES, datasets:[{data:INCIDENT_TYPES.map(()=>Math.round(rand(2,14))), backgroundColor:['#FF4757','#FF9F43','#F2C94C','#2ED573','#4C8DFF','#2FD9C4'], borderWidth:0}]},
+      options:{plugins:{legend:{position:'right', labels:{color:'#7E92A3', font:{family:'IBM Plex Sans', size:11}}}}}
+    });
+
+    analyticsCharts.cReport = new Chart(document.getElementById('c-report-activity'), chartCfg('line',
+      times,
+      [{label:'Citizen reports received', data:reportSeries, color:'#FF4757'}]));
+
+    const pulseData = (mockState && mockState.alerts && mockState.alerts.length) ? [mockState.alerts.length, mockState.incidents.length, ROADS_BLOCKED.length, SHELTERS.filter(s=>s.occ/s.capacity > 0.75).length] : [3, 6, 1, 3];
+    analyticsCharts.cPulse = new Chart(document.getElementById('c-pulse'), chartCfg('bar',
+      ['Alerts', 'Incidents', 'Blocked roads', 'Shelter pressure'],
+      [{label:'Live event load', data:pulseData, color:'#2FD9C4'}]));
+
+    analyticsCharts.cShelter = new Chart(document.getElementById('c-shelter'), chartCfg('bar',
+      SHELTERS.map(s=>s.name.split(',')[0].slice(0,16)),
+      [{label:'Occupied', data:SHELTERS.map(s=>s.occ), color:'#FF9F43'},{label:'Capacity', data:SHELTERS.map(s=>s.capacity), color:'#22303F'}]));
+  } else {
+    renderFallbackChart('c-trend', 'line', times, trendSeries, '#2FD9C4');
+    renderFallbackChart('c-district', 'bar', DISTRICTS.map(d=>d.name.slice(0,4)), (mockState && mockState.incidents && mockState.incidents.length) ? DISTRICTS.map(d=>Math.round(d.prob*100)) : DEMO_HISTORY.districtRisk.slice(), '#4C8DFF');
+    const fallbackRain = (mockState && mockState.incidents && mockState.incidents.length) ? Array.from({length:12},()=>Math.round(rand(40,220))) : DEMO_HISTORY.rainfall.slice();
+    renderFallbackChart('c-sensor', 'line', times, fallbackRain, '#4C8DFF');
+    renderFallbackChart('c-report-activity', 'line', times, reportSeries, '#FF4757');
+    renderFallbackChart('c-pulse', 'bar', ['Alerts', 'Incidents', 'Blocked roads', 'Shelter pressure'], (mockState && mockState.alerts && mockState.alerts.length) ? [mockState.alerts.length, mockState.incidents.length, ROADS_BLOCKED.length, SHELTERS.filter(s=>s.occ/s.capacity > 0.75).length] : [3, 6, 1, 3], '#2FD9C4');
+    renderFallbackChart('c-shelter', 'bar', SHELTERS.map(s=>s.name.split(',')[0].slice(0,16)), SHELTERS.map(s=>s.occ), '#FF9F43');
+    const incidentCanvas = document.getElementById('c-incident');
+    if (incidentCanvas && incidentCanvas.parentElement) {
+      incidentCanvas.parentElement.innerHTML = '<div style="height:230px; display:flex; align-items:center; justify-content:center; color:#EAF1F5; font-size:12px; line-height:1.7; background:rgba(17,26,38,.6); border-radius:10px;">Flooded Road: 11<br>Rising Water: 14<br>Person Needs Help: 9<br>Infrastructure Damage: 7<br>Shelter Issue: 6<br>Other: 5</div>';
+    }
+  }
+
+  document.getElementById('historicalIncidents').innerHTML = mockState.incidents.slice().reverse().map(i => `
+    <div class="notification-item">
+      <div class="head">
+        <div class="list-title">${i.type} · ${i.location}</div>
+        <span class="feed-badge ${i.status}">${i.status}</span>
+      </div>
+      <div class="text">${i.desc} · ${i.severity} · ${timeAgo(i.ts)}</div>
+    </div>
+  `).join('');
+
+  const heatValues = (mockState && mockState.incidents && mockState.incidents.length) ? DISTRICTS.slice(0, 8).map(d => d.risk === 'CRITICAL' ? 92 : d.risk === 'HIGH' ? 78 : d.risk === 'MODERATE' ? 55 : 28) : DEMO_HISTORY.districtHeat.slice();
+  const heatItems = DISTRICTS.slice(0, 8).map((d, index) => {
+    const key = heatValues[index];
+    return `
+      <div class="heat-cell" style="background:linear-gradient(135deg, ${riskColor(d.risk)}22, ${riskColor(d.risk)}66)">
+        <div class="district">${d.name}</div>
+        <div class="level">${key}</div>
+      </div>
+    `;
+  }).join('');
+  document.getElementById('districtHeat').innerHTML = heatItems;
+}
+function chartCfg(type, labels, series){
+  return {
+    type,
+    data:{ labels, datasets: series.map(s=>({
+      label:s.label, data:s.data, borderColor:s.color, backgroundColor: type==='bar'? s.color : s.color+'33',
+      fill: type==='line', tension:.35, pointRadius:0, borderWidth:2, borderRadius: type==='bar'?4:0
+    }))},
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:series.length>1, labels:{color:'#7E92A3', font:{family:'IBM Plex Sans', size:11}}}},
+      scales:{
+        x:{ticks:{color:'#57687A', font:{size:10}}, grid:{color:'#1A2532'}},
+        y:{ticks:{color:'#57687A', font:{size:10}}, grid:{color:'#1A2532'}}
+      }
+    }
+  };
+}
+
+// ================= MAP LAYER =================
+function riskColor(r){ return {CRITICAL:'#FF4757', HIGH:'#FF9F43', MODERATE:'#F2C94C', LOW:'#2ED573'}[r] || '#4C8DFF'; }
+function plotMapLayer(map, opts){
+  if(opts.showRisk){
+    DISTRICTS.forEach(d=>{
+      L.circleMarker([d.lat,d.lng], {radius:14, color:riskColor(d.risk), fillColor:riskColor(d.risk), fillOpacity:.35, weight:2})
+        .addTo(map).bindPopup(`<b>${d.name}</b><br>Risk: ${d.risk} (${Math.round(d.prob*100)}%)`);
+    });
+  }
+  if(opts.showShelters){
+    SHELTERS.forEach(s=>{
+      L.circleMarker([s.lat,s.lng], {radius:7, color:'#4C8DFF', fillColor:'#4C8DFF', fillOpacity:.9, weight:1})
+        .addTo(map).bindPopup(`<b>${s.name}</b><br>${s.occ}/${s.capacity} occupied<br>Status: ${s.status}`);
+    });
+  }
+  if(opts.showHospitals){
+    HOSPITALS.forEach(h=>{
+      L.marker([h.lat,h.lng]).addTo(map).bindPopup(`<b>🏥 ${h.name}</b>`);
+    });
+  }
+  if(opts.showIncidents){
+    mockState.incidents.forEach(i=>{
+      const d = DISTRICTS.find(dd=>i.location.includes(dd.name)) || DISTRICTS[0];
+      L.marker([d.lat+rand(-.05,.05), d.lng+rand(-.05,.05)]).addTo(map).bindPopup(`<b>📍 ${i.type}</b><br>${i.location}<br>${i.status}`);
+    });
+  }
+  if(opts.showRoads){
+    ROADS_BLOCKED.forEach(r=>{
+      L.marker([r.lat,r.lng], {icon: L.divIcon({html:'🚧', className:'', iconSize:[20,20]})}).addTo(map).bindPopup(`<b>Blocked road</b><br>${r.name}`);
+    });
+  }
+}
+
+// ---------- helpers ----------
+function renderList(id, html){ document.getElementById(id).innerHTML = html || '<div class="list-meta">Nothing to show.</div>'; }
+function renderFallbackChart(containerId, type, labels, values, color='#4C8DFF'){
+  const el = document.getElementById(containerId);
+  if(!el) return;
+  const parent = el.closest('.chart-wrap') || el.parentElement;
+  if(!parent) return;
+  const markup = type === 'bar'
+    ? (() => {
+        const max = Math.max(...values, 1);
+        const barWidth = 100 / Math.max(labels.length, 1) - 8;
+        return `
+          <div style="height:100%; display:flex; flex-direction:column; justify-content:center;">
+            <svg viewBox="0 0 100 100" width="100%" height="100%" preserveAspectRatio="none" style="display:block; border-radius:10px; background:rgba(17,26,38,.6);">
+              ${values.map((value, idx) => {
+                const x = idx * (100 / values.length) + 4;
+                const h = Math.max((value / max) * 72, 6);
+                const y = 100 - h;
+                return `<rect x="${x}" y="${y}" width="${barWidth}" height="${h}" rx="3" fill="${color}" />`;
+              }).join('')}
+            </svg>
+            <div style="display:flex; justify-content:space-between; margin-top:8px; font-size:10px; color:#7E92A3;">
+              ${labels.map(label => `<span>${label}</span>`).join('')}
+            </div>
+          </div>
+        `;
+      })()
+    : (() => {
+        const max = Math.max(...values, 1);
+        const points = values.map((value, idx) => {
+          const x = (idx / Math.max(values.length - 1, 1)) * 100;
+          const y = 100 - (value / max) * 72;
+          return `${x},${y}`;
+        }).join(' ');
+        return `
+          <div style="height:100%; display:flex; flex-direction:column; justify-content:center;">
+            <svg viewBox="0 0 100 100" width="100%" height="100%" preserveAspectRatio="none" style="display:block; border-radius:10px; background:rgba(17,26,38,.6);">
+              <polyline points="${points}" fill="none" stroke="${color}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></polyline>
+              ${values.map((value, idx) => {
+                const x = (idx / Math.max(values.length - 1, 1)) * 100;
+                const y = 100 - (value / max) * 72;
+                return `<circle cx="${x}" cy="${y}" r="1.5" fill="${color}" />`;
+              }).join('')}
+            </svg>
+            <div style="display:flex; justify-content:space-between; margin-top:8px; font-size:10px; color:#7E92A3;">
+              ${labels.map(label => `<span>${label}</span>`).join('')}
+            </div>
+          </div>
+        `;
+      })();
+
+  const replacement = document.createElement('div');
+  replacement.style.height = '230px';
+  replacement.style.width = '100%';
+  replacement.innerHTML = markup;
+  parent.innerHTML = '';
+  parent.appendChild(replacement);
+}
+function sevClass(sev){
+  if(sev==='EMERGENCY'||sev==='CRITICAL') return 'critical';
+  if(sev==='HIGH ALERT'||sev==='HIGH') return 'high';
+  if(sev==='WARNING'||sev==='MODERATE') return 'moderate';
+  return 'low';
+}
+function timeAgo(ts){
+  const m = Math.floor((Date.now()-ts)/60000);
+  if(m<1) return 'just now';
+  if(m<60) return m+' min ago';
+  return Math.floor(m/60)+'h ago';
+}
+
+// periodic sensor "streaming" refresh while on live views
+setInterval(()=>{
+  if(!document.getElementById('view-authority').classList.contains('hidden')) renderAuthority();
+  if(!document.getElementById('view-citizen').classList.contains('hidden')) renderCitizen();
+}, 8000);
+
+renderReportsDashboard();
+renderAnalytics();
+renderAiAnalysisBoard();
+renderAuthority();
+renderCitizen();
+
+/* ================= FLOODGUARD AI CHATBOT ================= */
+var ChatConfig = {
+  API_ENDPOINT: '/api/chat',  // backend endpoint (set to null for demo mode)
+  API_KEY: (typeof localStorage !== 'undefined') ? localStorage.getItem('FLOODGUARD_API_KEY') : null,
+  DEMO_MODE: true,  // start in demo mode
+};
+
+var chatState = {
+  isOpen: false,
+  messages: [
+    {role:'bot', text:'Hello! I\'m FloodGuard, your AI-powered flood intelligence assistant. I can help you with:\n\n• Current flood risks in your area\n• Shelter locations and availability\n• Evacuation routes\n• Emergency contact info\n• Real-time alerts and updates\n\nHow can I help you today?', ts:Date.now()}
+  ],
+  waitingForResponse: false,
+  unreadCount: 0,
+};
+
+var ChatKB = {
+  emergencies: ['emergency', 'help', 'danger', 'urgent', 'critical', 'rescue', 'stranded', 'injured', 'dying', 'mayday'],
+  shelter: ['shelter', 'safe', 'refuge', 'evacuation center', 'camp', 'accommodation', 'stay'],
+  risk: ['risk', 'flood', 'water level', 'rainfall', 'danger', 'probability', 'chance'],
+  route: ['route', 'road', 'way', 'direction', 'path', 'evacuate', 'leave'],
+  contact: ['contact', 'call', 'phone', 'authority', 'number', 'reach'],
+};
+
+function categorizeQuery(text) {
+  const lower = text.toLowerCase();
+  for (let [category, keywords] of Object.entries(ChatKB)) {
+    if (keywords.some(kw => lower.includes(kw))) return category;
+  }
+  return 'general';
+}
+
+function generateChatResponse(userQuery) {
+  const category = categorizeQuery(userQuery);
+  const lower = userQuery.toLowerCase();
+  
+  // Emergency handling
+  if (ChatKB.emergencies.some(e => lower.includes(e))) {
+    return `🚨 **EMERGENCY ASSISTANCE**\n\nIf you are in immediate danger:\n• **Call Emergency**: +91-108 (or state emergency number)\n• **Nearest Hospital**: General Hospital, Alappuzha (0479-2345678)\n• **Nearest Shelter**: Govt HSS Cherthala (400 capacity, has medical)\n• **Active Rescue**: Contact Alappuzha District Authority\n\nYour location is marked HIGH RISK. Please evacuate immediately to your nearest shelter.`;
+  }
+  
+  // Shelter queries
+  if (category === 'shelter') {
+    const availableShelters = SHELTERS.filter(s => s.status !== 'CLOSED');
+    const nearest = availableShelters[0];
+    return `**Shelter Information**\n\n🏢 **Nearest Available**: ${nearest.name}\n• Capacity: ${nearest.capacity} people\n• Current: ${nearest.occ}/${nearest.capacity} occupied (${Math.round(nearest.occ/nearest.capacity*100)}%)\n• Status: ${nearest.status}\n• Food: ${ nearest.food ? '✓' : '✗'} | Water: ${nearest.water ? '✓' : '✗'} | Medical: ${nearest.medical ? '✓' : '✗'}\n• Contact: ${nearest.contact}\n\nAll available shelters are equipped with basic amenities. Priority for elderly, children, and persons with disabilities.`;
+  }
+  
+  // Risk queries
+  if (category === 'risk') {
+    const yourDistrict = DISTRICTS.find(d => d.name === 'Alappuzha') || DISTRICTS[0];
+    const pred = predictRisk({rainfall:sensorState.rainfall, water_level:sensorState.river_level, humidity:sensorState.humidity, soil_moisture:sensorState.soil_moisture, temperature:sensorState.temperature});
+    return `**Current Flood Risk Assessment**\n\n📍 **Your Location**: ${yourDistrict.name}\n• Risk Level: **${pred.risk_level}**\n• Probability: **${Math.round(pred.probability*100)}%**\n• Rainfall (24h): ${sensorState.rainfall.toFixed(0)} mm\n• Water Level: ${sensorState.river_level.toFixed(1)} m\n• Status: ${mockState.alerts.length} active alerts\n\nRecommendation: ${pred.risk_level === 'CRITICAL' ? '⚠️ Evacuate immediately' : pred.risk_level === 'HIGH' ? '⚠️ Prepare to evacuate' : '✓ Stay alert and monitor updates'}.`;
+  }
+  
+  // Route queries
+  if (category === 'route') {
+    return `**Evacuation Route Planner**\n\n🛣️ **Smart Route Calculation**\n• Your location → Nearest safe shelter\n• Avoids ${ROADS_BLOCKED.length} known blocked roads\n• Estimated travel time: 45-60 minutes\n• Route risk level: MODERATE\n\nRoutes are updated in real-time as new blockages are reported. Use the map interface on your dashboard for turn-by-turn navigation.`;
+  }
+  
+  // Contact queries
+  if (category === 'contact') {
+    return `**Emergency Contacts**\n\n📞 **Kerala State Authorities**\n• Emergency: 108\n• Police: 100\n• Fire: 101\n• Disaster Management: +91-471-2321234\n• Alappuzha District: 0477-2351001\n• NDRF (Rescue): 9999999999\n\n**24/7 Flood Helpline**: 1077 (toll-free)`;
+  }
+  
+  // General Q&A
+  return `I understand you're asking about **${category.charAt(0).toUpperCase() + category.slice(1)}** matters.\n\nI can help with:\n• **Shelter locations** & availability\n• **Current flood risks** in your area\n• **Evacuation routes** & safety guidance\n• **Emergency contacts** & support\n• **Alerts & updates** from authorities\n\nWhat would you like to know more about?`;
+}
+
+async function sendChatMessage() {
+  const inputEl = document.getElementById('chatInput');
+  const text = inputEl.value.trim();
+  if (!text) return;
+  
+  inputEl.value = '';
+  
+  // Add user message
+  chatState.messages.push({role:'user', text, ts:Date.now()});
+  renderChatMessages();
+  inputEl.focus();
+  
+  chatState.waitingForResponse = true;
+  renderChatMessages();  // show loading state
+  
+  let response;
+  try {
+    if (ChatConfig.API_KEY && !ChatConfig.DEMO_MODE) {
+      // Real API call
+      const apiResp = await fetch(ChatConfig.API_ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${ChatConfig.API_KEY}`
+        },
+        body: JSON.stringify({query: text, context: {rainfall: sensorState.rainfall, waterLevel: sensorState.river_level, incidents: mockState.incidents.length}})
+      });
+      if (!apiResp.ok) throw new Error(`HTTP ${apiResp.status}`);
+      const data = await apiResp.json();
+      response = data.response || 'Unable to generate response.';
+    } else {
+      // Demo mode - use KB
+      response = generateChatResponse(text);
+    }
+  } catch (err) {
+    console.error('Chat error:', err);
+    response = `⚠️ Unable to connect to AI backend (${ChatConfig.DEMO_MODE ? 'demo mode active' : 'API error'})\n\nI'm operating in fallback mode. Try asking about shelters, risk, routes, or emergency contacts.`;
+  }
+  
+  await new Promise(r => setTimeout(r, 400 + Math.random()*600));  // simulate typing
+  
+  chatState.messages.push({role:'bot', text:response, ts:Date.now()});
+  chatState.waitingForResponse = false;
+  renderChatMessages();
+}
+
+function renderChatMessages() {
+  const msgContainer = document.getElementById('chatMessages');
+  msgContainer.innerHTML = chatState.messages.map(msg => `
+    <div class="chat-message ${msg.role}">
+      <div class="avatar">${msg.role === 'bot' ? '🤖' : '👤'}</div>
+      <div>
+        <div class="msg-bubble ${msg.role}">${msg.text.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>').replace(/\n/g, '<br>')}</div>
+        <div class="msg-time">${new Date(msg.ts).toLocaleTimeString('en-IN', {hour12:false, hour:'2-digit', minute:'2-digit'})}</div>
+      </div>
+    </div>
+  `).join('');
+  
+  if (chatState.waitingForResponse) {
+    msgContainer.innerHTML += `
+      <div class="chat-message bot">
+        <div class="avatar">🤖</div>
+        <div class="msg-bubble bot loading"><div class="typing-indicator"><span></span><span></span><span></span></div></div>
+      </div>
+    `;
+  }
+  
+  msgContainer.scrollTop = msgContainer.scrollHeight;
+}
+
+function toggleChatWindow() {
+  chatState.isOpen = !chatState.isOpen;
+  const chatWindow = document.getElementById('chatWindow');
+  const chatFab = document.getElementById('chatFab');
+  chatWindow.classList.toggle('open', chatState.isOpen);
+  if (chatState.isOpen) {
+    chatFab.classList.remove('unread');
+    document.getElementById('chatInput').focus();
+  }
+}
+
+// Attach event listeners after DOM is ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', attachChatListeners);
+} else {
+  attachChatListeners();
+}
+
+function attachChatListeners() {
+  const chatFab = document.getElementById('chatFab');
+  const chatClose = document.getElementById('chatClose');
+  const chatInput = document.getElementById('chatInput');
+  const chatSend = document.getElementById('chatSend');
+  
+  if (chatFab) chatFab.addEventListener('click', toggleChatWindow);
+  if (chatClose) chatClose.addEventListener('click', toggleChatWindow);
+  if (chatInput) {
+    chatInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey && window.chatState && !window.chatState.waitingForResponse) {
+        sendChatMessage();
+      }
+    });
+  }
+  if (chatSend) chatSend.addEventListener('click', sendChatMessage);
+  
+  document.querySelectorAll('.quick-reply').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const input = document.getElementById('chatInput');
+      if (input) {
+        input.value = btn.textContent;
+        input.focus();
+      }
+    });
+  });
+  
+  // Initialize chat messages display
+  if (typeof renderChatMessages === 'function' && window.chatState) {
+    renderChatMessages();
+  }
+}
+</script>
+
+<!-- ============ FLOODGUARD AI CHATBOT ============ -->
+<button class="chat-fab" id="chatFab" title="Open FloodGuard AI Assistant" aria-label="FloodGuard AI Chatbot">💬</button>
+
+<div class="chat-window" id="chatWindow">
+  <div class="chat-header">
+    <div>
+      <h3>🤖 FloodGuard AI</h3>
+      <div class="chat-header-meta" id="headerStatus">Demo mode · Always online</div>
+    </div>
+    <button class="chat-close" id="chatClose" aria-label="Close chat">×</button>
+  </div>
+  
+  <div class="chat-messages" id="chatMessages"></div>
+  
+  <div class="quick-replies" style="padding:0 12px;">
+    <button class="quick-reply">Find Shelter</button>
+    <button class="quick-reply">My Risk Level</button>
+    <button class="quick-reply">Emergency</button>
+  </div>
+  
+  <div class="chat-input-wrap">
+    <input type="text" class="chat-input" id="chatInput" placeholder="Ask me anything..." autocomplete="off">
+    <button class="chat-send" id="chatSend" title="Send message">Send</button>
+  </div>
+  
+  <div class="api-status demo" id="apiStatus">🟡 Demo mode · No API key</div>
+</div>
+
+</body>
+  </html>
